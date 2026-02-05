@@ -1,57 +1,54 @@
+/* Basislayout */
+:root {
+color-scheme: dark;
+}
+html, body {
+height: 100%;
+}
 body {
-    margin: 0;
-    overflow: hidden;
-    font-family: Arial, sans-serif;
+margin: 0;
+background: #1b1e24;
+color: #eceff4;
+font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+display: grid;
+grid-template-rows: auto 1fr auto;
 }
-
+.topbar {
+text-align: center;
+padding: 12px 8px;
+background: #16181d;
+border-bottom: 1px solid #252a33;
+}
+.topbar h1 {
+margin: 0;
+font-size: 20px;
+letter-spacing: 0.2px;
+}
+.subtitle {
+margin: 4px 0 0;
+font-size: 12px;
+color: #a7b0c0;
+}
+main {
+display: grid;
+place-items: center;
+padding: 10px;
+}
 #game {
-    position: relative;
-    width: 800px;
-    height: 400px;
-    background: skyblue;
-    margin: 0 auto;
-    overflow: hidden;
+width: 960px;
+max-width: 100%;
+margin: 0 auto;
+aspect-ratio: 16 / 9;
+border-radius: 10px;
+box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+overflow: hidden;
 }
-
-#player {
-    position: absolute;
-    width: 50px;
-    height: 50px;
-    bottom: 50px;
-    left: 50px;
+.footer {
+text-align: center;
+padding: 10px;
+color: #a7b0c0;
+font-size: 12px;
 }
-
-#obstacle {
-    position: absolute;
-    width: 30px;
-    height: 50px;
-    background: brown;
-    bottom: 50px;
-    left: 800px;
-}
-
-#word {
-    position: absolute;
-    top: 50px;
-    left: 50%;
-    font-size: 2em;
-    transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.7);
-    padding: 5px 10px;
-    border-radius: 5px;
-}
-
-#input {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 1.5em;
-}
-
-#score {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    font-size: 1.5em;
+@media (max-width: 1000px) {
+#game { width: 100%; }
 }
