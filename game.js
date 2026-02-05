@@ -89,7 +89,7 @@ preload() {
 
   // Sounds
   this.load.audio('sfx_kling', 'assets/sounds/kling.mp3');
-  this.load.audio('sfx_jump',  'assets/sounds/jump.wav');
+  this.load.audio('sfx_jump',  'assets/sounds/jump.mp3');
   this.load.audio('bgm',       'assets/sounds/bgm.mp3');
 
   // Physischer Boden + sichtbarer Bodenstreifen
@@ -212,3 +212,308 @@ spawnEnemy() {
   sprite.setScale(def.scale).setImmovable(true);
   sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.enemySpeedFactor);
   sprite.destroyed = false; sprite.type = 'enemy'; sprite.id = id;
+
+  const word = this.nextWord({ preferShort: true });
+  sprite.word = word;
+  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, word, {
+    fontFamily: 'monospace', fontSize: 18, color: '#9b2c2c'
+  }).setOrigin(0.5);
+  if (!this.state.target) this.chooseTarget();
+}
+
+spawnItem() {
+  const def = Phaser.Utils.Array.GetRandom(BONUS_ITEMS);
+  const id = this.state.idCounter++; const x = WIDTH + 160;
+
+  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
+  const hPix = temp.displayHeight; temp.destroy();
+
+  const groundY = HEIGHT - GROUND_H;
+  const altitude = Phaser.Math.Between(0, 1) ? (groundY - hPix / 2) : (groundY - GROUND_H - Phaser.Math.Between(90, 150));
+
+  const sprite = this.groups.items.create(x, altitude, def.key);
+  sprite.setScale(def.scale).setImmovable(true);
+  sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor);
+  sprite.type = 'item'; sprite.id = id; sprite.word = def.word; sprite.points = def.points;
+  sprite.readyToCollect = false;
+
+  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, def.word, {
+    fontFamily: 'monospace', fontSize: 18, color: '#0b315a'
+  }).setOrigin(0.5);
+  if (!this.state.target) this.chooseTarget();
+}
+
+// Wortauswahl
+nextWord(opts = {}) {
+  if (this.state.words.length === 0) {
+    const raw = this.cache.text.get('woerter') || '';
+    this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
+    Phaser.Utils.Array.Shuffle(this.state.words);
+  }
+  if (opts.preferShort) {
+    const idx = this.state.words.findIndex(w => w.length <= 6);
+    if (idx > -1) return this.state.words.splice(idx, 1)[0];
+  }
+  return this.state.words.shift();
+}
+
+// Ziel wählen
+chooseTarget() {
+  const candidates = [];
+  this.groups.obstacles.getChildren().forEach(o => { if (o.active && !o.cleared && o.x > this.player.x - 10) candidates.push(o); });
+  this.groups.enemies.getChildren().forEach(e => { if (e.active && !e.destroyed && e.x > this.player.x - 10) candidates.push(e); });
+  this.groups.items.getChildren().forEach(i => { if (i.active && !i.readyToCollect && i.x > this.player.x - 10) candidates.push(i); });
+
+  if (candidates.length === 0) {
+    this.state.target = null; this.state.typedIndex = 0; this.wordText.setText(''); return;
+  }
+  candidates.sort((a, b) => a.x - b.x);
+  const target = candidates[0];
+  this.state.target = target; this.state.typedIndex = 0;
+  this.wordText.setText(target.word); this.updateTargetLabelProgress();
+}
+
+// Eingabe
+handleKey(e) {
+  if (this.state.gameOver) return;
+  if (!this.state.target) return;
+  const key = e.key;
+  if (!key || key.length !== 1) return;
+
+  const expected = this.normalize(this.state.target.word[this.state.typedIndex] || '');
+  const got = this.normalize(key);
+
+  if (got === expected) {
+    this.state.typedIndex++; this.state.correctChars++;
+    this.updateTargetLabelProgress();
+    if (this.state.typedIndex === this.state.target.word.length) {
+      this.onWordCompleted(this.state.target);
+    }
+  } else {
+    this.state.errors++; this.flashWord();
+  }
+  this.updateHUD();
+}
+
+normalize(ch) { return ch.toLowerCase(); }
+
+updateTargetLabelProgress() {
+  const t = this.state.target;
+  if (!t || !t.label) return;
+  const typed = t.word.slice(0, this.state.typedIndex);
+  const rest = t.word.slice(this.state.typedIndex);
+  t.label.setText(typed + rest);
+}
+
+addPoints(reason, pts) {
+  this.state.score += pts;
+  this.state.eventLog.push({ t: Date.now(), reason, pts });
+  if (this.state.eventLog.length > 10) this.state.eventLog.shift();
+  this.updatePointsLog();
+  this.toast(`+${pts} ${reason}`);
+}
+
+updatePointsLog() {
+  if (!this.pointsLogText) return;
+  const lines = ['Punkte-Log:'];
+  for (let i = this.state.eventLog.length - 1; i >= 0; i--) {
+    const e = this.state.eventLog[i];
+    lines.push(`+${e.pts} ${e.reason}`);
+    if (lines.length > 8) break;
+  }
+  this.pointsLogText.setText(lines.join('\n'));
+}
+
+onWordCompleted(target) {
+  if (target.type === 'obstacle') {
+    // Hindernis: clearen und Sprung planen
+    target.cleared = true;
+    target.body.checkCollision.none = true;
+    const triggerX = (target.x - target.displayWidth / 2) - Tuning.preJumpDistancePx;
+    this.state.jumpTriggerX[target.id] = triggerX;
+    this.addPoints('Hindernis', 10);
+  } else if (target.type === 'enemy') {
+    this.destroyEnemy(target);
+    this.addPoints('Gegner', 20);
+  } else if (target.type === 'item') {
+    // Item: freischalten und Sprung zum Item planen
+    target.readyToCollect = true;
+    const triggerX = (target.x - target.displayWidth / 2) - Tuning.preJumpDistancePx;
+    this.state.jumpTriggerX[target.id] = triggerX;
+    // Sofort einsammeln, falls bereits Überlappung
+    this.collectItem(target);
+  }
+
+  this.state.clears++;
+  if (this.state.clears % Tuning.speedStepEvery === 0) {
+    this.state.worldSpeed += Tuning.speedStep;
+    this.adjustWorldSpeed();
+    this.toast(`Schneller! Speed ${Math.round(this.state.worldSpeed)}px/s`);
+  }
+
+  this.state.target = null;
+  this.wordText.setText('');
+  this.chooseTarget();
+}
+
+collectItem(item) {
+  if (!item.active) return;
+  // Punkte und Kling-Sound
+  const pts = item.points || 25;
+  const name = item.word || 'Item';
+  this.sounds.kling && this.sounds.kling.play();
+  item.label && item.label.destroy();
+  item.destroy();
+  this.addPoints(name, pts);
+}
+
+destroyEnemy(enemy) {
+  enemy.destroyed = true;
+  enemy.body.checkCollision.none = true;
+  this.tweens.add({
+    targets: [enemy],
+    scale: 0.2,
+    alpha: 0,
+    duration: 180,
+    onComplete: () => { enemy.label && enemy.label.destroy(); enemy.destroy(); }
+  });
+}
+
+adjustWorldSpeed() {
+  this.groups.obstacles.getChildren().forEach(o => { if (o.active) o.body.setVelocityX(-this.state.worldSpeed); });
+  this.groups.enemies.getChildren().forEach(e => { if (e.active) e.body.setVelocityX(-this.state.worldSpeed * Tuning.enemySpeedFactor); });
+  this.groups.items.getChildren().forEach(i => { if (i.active) i.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor); });
+}
+
+flashWord() { this.cameras.main.flash(80, 247, 118, 142, false); }
+
+update() {
+  if (this.state.gameOver) return;
+
+  // Labels folgen + Offscreen aufräumen
+  this.groups.obstacles.getChildren().forEach(o => {
+    if (!o.active) return;
+    if (o.label) { o.label.x = o.x; o.label.y = o.y - o.displayHeight / 2 - 20; }
+    if (o.x < -100) { o.label && o.label.destroy(); o.destroy(); delete this.state.jumpTriggerX[o.id]; }
+  });
+  this.groups.enemies.getChildren().forEach(e => {
+    if (!e.active) return;
+    if (e.label) { e.label.x = e.x; e.label.y = e.y - e.displayHeight / 2 - 18; }
+    if (e.x < -100) { e.label && e.label.destroy(); e.destroy(); }
+  });
+  this.groups.items.getChildren().forEach(i => {
+    if (!i.active) return;
+    if (i.label) { i.label.x = i.x; i.label.y = i.y - i.displayHeight / 2 - 18; }
+    if (i.x < -100) { i.label && i.label.destroy(); i.destroy(); }
+  });
+
+  // Zuverlässiger Auto‑Sprung (Hindernisse + freigeschaltete Items)
+  const playerFront = this.player.body.x + this.player.body.width;
+  Object.keys(this.state.jumpTriggerX).forEach(idStr => {
+    const id = +idStr; const triggerX = this.state.jumpTriggerX[id];
+    const obj = this.groups.obstacles.getChildren().find(o => o.id === id && o.active)
+             || this.groups.items.getChildren().find(i => i.id === id && i.active);
+    if (!obj) { delete this.state.jumpTriggerX[id]; return; }
+
+    const safeWindow = 10;
+    const leftEdge = obj.x - obj.displayWidth / 2;
+
+    if (playerFront >= triggerX - safeWindow && this.player.body.onFloor()) {
+      this.player.setVelocityY(-Tuning.jumpStrength);
+      this.sounds.jump && this.sounds.jump.play();
+      delete this.state.jumpTriggerX[id];
+    }
+    // Fallback, falls Trigger knapp verpasst
+    if (playerFront > leftEdge + 6 && this.player.body.onFloor() && this.state.jumpTriggerX[id]) {
+      this.player.setVelocityY(-Tuning.jumpStrength);
+      this.sounds.jump && this.sounds.jump.play();
+      delete this.state.jumpTriggerX[id];
+    }
+  });
+
+  // Ziel ggf. neu wählen
+  if (!this.state.target || !this.state.target.active ||
+      (this.state.target.type === 'obstacle' && this.state.target.cleared) ||
+      (this.state.target.type === 'enemy' && this.state.target.destroyed) ||
+      (this.state.target.type === 'item' && this.state.target.readyToCollect) ||
+      (this.state.target.x < this.player.x - 20)) {
+    this.chooseTarget();
+  }
+
+  this.updateHUD();
+}
+
+updateHUD() {
+  const minutes = Math.max(0.0001, (performance.now() - this.state.startTime) / 60000);
+  const wpm = Math.round((this.state.correctChars / 5) / minutes);
+  const acc = (this.state.correctChars + this.state.errors) > 0
+    ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
+    : 100;
+  this.hudText.setText(`Score: ${this.state.score}   WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}`);
+
+  if (this.state.target) {
+    const typed = this.state.target.word.slice(0, this.state.typedIndex);
+    const rest = this.state.target.word.slice(this.state.typedIndex);
+    this.wordText.setText(typed + rest);
+  }
+}
+
+toast(msg) {
+  this.msgText.setText(msg);
+  this.tweens.killTweensOf(this.msgText);
+  this.msgText.setAlpha(1);
+  this.tweens.add({ targets: this.msgText, alpha: 0, duration: 1200, ease: 'Sine.easeOut', delay: 300 });
+}
+
+gameOver(reason) {
+  this.spawnTimerObstacles && this.spawnTimerObstacles.remove();
+  this.spawnTimerEnemies && this.spawnTimerEnemies.remove();
+  this.spawnTimerItems && this.spawnTimerItems.remove();
+
+  this.physics.world.pause();
+  this.state.gameOver = true;
+
+  const minutes = Math.max(0.0001, (performance.now() - this.state.startTime) / 60000);
+  const wpm = Math.round((this.state.correctChars / 5) / minutes);
+  const acc = (this.state.correctChars + this.state.errors) > 0
+    ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
+    : 100;
+
+  const entry = { ts: Date.now(), score: this.state.score, wpm, acc, clears: this.state.clears, log: this.state.eventLog };
+  const hist = JSON.parse(localStorage.getItem('jnt_history') || '[]');
+  hist.push(entry);
+  localStorage.setItem('jnt_history', JSON.stringify(hist));
+
+  const center = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH*0.80, 260, 0x000000, 0.35).setDepth(30);
+  const lines = [
+    `Game Over`,
+    `${reason}`,
+    `Score: ${this.state.score} | WPM: ${wpm} | Genauigkeit: ${acc}% | Clears: ${this.state.clears}`,
+    `Letzte Punkte:`,
+    ...this.state.eventLog.slice(-6).map(e => `+${e.pts} ${e.reason}`),
+    `Drücke R oder Enter, oder klicke, um neu zu starten`
+  ];
+  const text = this.add.text(WIDTH/2, HEIGHT/2, lines.join('\n'), {
+    fontFamily: 'system-ui', fontSize: 18, color: '#083056', align: 'center'
+  }).setOrigin(0.5).setDepth(31);
+
+  const restart = () => { center.destroy(); text.destroy(); this.scene.restart(); };
+  const rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+  const enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+  rKey.once('down', restart);
+  enterKey.once('down', restart);
+  this.input.once('pointerdown', restart);
+}
+
+}
+
+const config = {
+type: Phaser.AUTO,
+width: WIDTH,
+height: HEIGHT,
+parent: 'game',
+backgroundColor: '#7ec4ff',
+render: { pixelArt: true, antialias: false },
+physics: { default: 'arcade', arcade: { gravity: { y: Tuning.gravityY }, debug: false } },
+scene: [GameScene]
+};
