@@ -1,8 +1,10 @@
+Tippen
 Springen
 Laufen
-Tippen
-Hindernis
-Schnell
 Triathlon
 Schwimmen
 Radfahren
+Kraulen
+Zeitfahren
+Laufschritt
+Hindernis
