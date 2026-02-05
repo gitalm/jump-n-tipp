@@ -15,9 +15,17 @@ function newWord() {
     word.textContent = currentWord;
 }
 
+// Spieler springen lassen
+function jump() {
+    player.src = "sprites/springend.png";
+    setTimeout(() => {
+        player.src = "sprites/laufend.png";
+    }, 500);
+}
+
 // Spielerbewegung
 function movePlayer() {
-    if (playerX < 750) playerX += 5;
+    if (playerX < 750) playerX += 2;
     player.style.left = playerX + "px";
 }
 
@@ -35,7 +43,8 @@ function moveObstacle() {
 input.addEventListener("input", (e) => {
     if (e.target.value === currentWord) {
         e.target.value = "";
-        playerX += 50; // Spieler springt vorwärts
+        jump();
+        playerX += 20; // Spieler springt vorwärts
         newWord();
     }
 });
