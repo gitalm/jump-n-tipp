@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tipp-Jump ’n’ Run</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #game { position: relative; width: 800px; height: 400px; background: skyblue; }
+        #player { position: absolute; width: 50px; height: 50px; background: red; bottom: 0; left: 50px; }
+        #obstacle { position: absolute; width: 30px; height: 30px; background: black; bottom: 0; left: 300px; }
+        #word { position: absolute; top: 50px; left: 50%; font-size: 2em; }
+        #input { position: absolute; bottom: 20px; left: 50%; }
+    </style>
+</head>
+<body>
+    <div id="game">
+        <div id="player"></div>
+        <div id="obstacle"></div>
+        <div id="word">Springen</div>
+        <input type="text" id="input" autofocus>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
