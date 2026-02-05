@@ -3,16 +3,25 @@ const obstacle = document.getElementById("obstacle");
 const word = document.getElementById("word");
 const input = document.getElementById("input");
 
-const words = ["Springen", "Laufen", "Tippen", "Hindernis", "Schnell"];
+let words = [];
 let currentWord = "";
 let playerX = 50;
 let obstacleX = 300;
 let gameActive = true;
 
-// Wort auswählen und anzeigen
+// Wörter aus der Textdatei laden
+async function loadWords() {
+    const response = await fetch('woerter.txt');
+    const text = await response.text();
+    words = text.split('\n').filter(word => word.trim() !== '');
+    newWord();
+}
+
+// Neues Wort auswählen
 function newWord() {
     currentWord = words[Math.floor(Math.random() * words.length)];
     word.textContent = currentWord;
+    input.value = "";
 }
 
 // Spieler springen lassen
@@ -42,7 +51,6 @@ function moveObstacle() {
 // Eingabe prüfen
 input.addEventListener("input", (e) => {
     if (e.target.value === currentWord) {
-        e.target.value = "";
         jump();
         playerX += 20; // Spieler springt vorwärts
         newWord();
@@ -59,5 +67,5 @@ function gameLoop() {
 }
 
 // Start
-newWord();
+loadWords();
 gameLoop();
