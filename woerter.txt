@@ -90,3 +90,7 @@ röhre
 röhren
 köhler
 tasten
+muenze
+herz
+schatz
+uhr
