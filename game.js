@@ -12,11 +12,11 @@ const OBST_W = 44;
 const OBST_H = 68;
 const ENEMY_SIZE = 44;
 
-const INITIAL_SPEED = 260;
-const SPEED_STEP = 18;
-const SPEED_STEP_EVERY = 20;
-const JUMP_STRENGTH = 720;
-const GRAVITY_Y = 2000;
+const INITIAL_SPEED = 180;      // vorher 260
+const SPEED_STEP = 10;          // vorher 18
+const SPEED_STEP_EVERY = 30;    // vorher 20
+const JUMP_STRENGTH = 720;      // unverändert
+const GRAVITY_Y = 2000;         // unverändert
 
 class GameScene extends Phaser.Scene {
 constructor() {
@@ -105,7 +105,7 @@ create() {
   this.anims.create({
     key: 'run',
     frames: this.anims.generateFrameNumbers('player', { start: 0, end: 3 }),
-    frameRate: 8, repeat: -1
+    frameRate: 7, repeat: -1
   });
   this.anims.create({
     key: 'jump',
@@ -142,11 +142,11 @@ create() {
 
   // Spawner
   this.spawnTimerObstacles = this.time.addEvent({
-    delay: 1700, loop: true, callback: () => this.spawnObstacle()
+    delay: 2400, loop: true, callback: () => this.spawnObstacle()
   });
-  this.time.delayedCall(12000, () => {
+  this.time.delayedCall(20000, () => {
     this.spawnTimerEnemies = this.time.addEvent({
-      delay: 3600, loop: true, callback: () => this.spawnEnemy()
+      delay: 5200, loop: true, callback: () => this.spawnEnemy()
     });
   });
 
@@ -335,7 +335,7 @@ update() {
     const target = this.groups.obstacles.getChildren().find(o => o.id === this.state.readyToJumpForId);
     if (target && target.active) {
       const playerFront = this.player.x + (PLAYER_FRAME_W * PLAYER_SCALE) / 2;
-      const preJump = 28; // Abstand vor Hindernis
+      const preJump = 36; // Abstand vor Hindernis
       if (playerFront >= target.x - preJump && this.player.body.onFloor()) {
         this.player.setVelocityY(-JUMP_STRENGTH);
         if (this.player.anims.currentAnim?.key !== 'jump') this.player.anims.play('jump', true);
