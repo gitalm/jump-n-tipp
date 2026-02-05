@@ -2,7 +2,7 @@
 html, body { height: 100%; }
 body {
 margin: 0;
-background: #7ec4ff; /* freundliches Blau */
+background: #7ec4ff;
 color: #0b315a;
 font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 display: grid;
@@ -17,12 +17,28 @@ color: #083056;
 }
 .topbar h1 { margin: 0; font-size: 20px; letter-spacing: 0.2px; }
 .subtitle { margin: 4px 0 0; font-size: 12px; color: #0b315a; }
-main { display: grid; place-items: center; padding: 10px; }
+main { display: grid; place-items: center; padding: 10px; gap: 14px; }
 #game {
 width: 960px; max-width: 100%; margin: 0 auto;
 aspect-ratio: 16 / 9; border-radius: 10px;
 box-shadow: 0 10px 30px rgba(0,0,0,0.25); overflow: hidden;
-background: #7ec4ff; / passt zum Body */
+background: #7ec4ff;
+}
+#help {
+width: 960px; max-width: 100%;
+background: rgba(255,255,255,0.7);
+border-radius: 10px;
+padding: 12px 16px;
+box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+#help h2 {
+margin: 0 0 6px;
+font-size: 16px;
+color: #083056;
+}
+#help ul {
+margin: 0; padding-left: 18px;
+font-size: 14px; line-height: 1.45;
 }
 .footer { text-align: center; padding: 10px; color: #0b315a; font-size: 12px; }
-@media (max-width: 1000px) { #game { width: 100%; } }
+@media (max-width: 1000px) { #game, #help { width: 100%; } }
