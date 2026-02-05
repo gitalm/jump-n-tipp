@@ -494,7 +494,7 @@ gameOver(reason) {
     `Score: ${this.state.score} | WPM: ${wpm} | Genauigkeit: ${acc}% | Clears: ${this.state.clears}`,
     `Letzte Punkte:`,
     ...this.state.eventLog.slice(-6).map(e => `+${e.pts} ${e.reason}`),
-    `Drücke R oder Enter, oder klicke, um neu zu starten`
+    `Drücke R oder Enter, oder klicke, um neu zu starten 🏴‍☠️`
   ];
   const text = this.add.text(WIDTH/2, HEIGHT/2, lines.join('\n'), { fontFamily: 'system-ui', fontSize: 18, color: '#083056', align: 'center' }).setOrigin(0.5).setDepth(31);
 
