@@ -1,28 +1,37 @@
 (() => {
 const WIDTH = 960;
 const HEIGHT = 540;
+const GROUND_H = 56;
 
-const Tuning = {
+// Level-Presets: Basis-Tempo, sanfte Beschleunigung pro Minute und Spawn-Intervalle
+const LevelPresets = {
+einfach: {
+initialSpeed: 150,
+accelPerMinute: 8,    // +8 px/s pro Minute
+obstacleDelayMs: 2800,
+enemyDelayMs: 6000,
+itemDelayMs: 9000,
+maxExtraSpeed: 80     // Deckel über Initial (behutsam)
+},
+mittel: {
 initialSpeed: 180,
-speedStep: 10,
-speedStepEvery: 30,
-
+accelPerMinute: 12,   // +12 px/s pro Minute
 obstacleDelayMs: 2400,
-enemyStartDelayMs: 20000,
 enemyDelayMs: 5200,
-enemySpeedFactor: 1.02,
-
 itemDelayMs: 8000,
-itemSpeedFactor: 1.0,
-
-gravityY: 2000,
-jumpStrength: 720,
-preJumpDistancePx: 56  // früherer Sprung
-
+maxExtraSpeed: 100
+},
+schnell: {
+initialSpeed: 220,
+accelPerMinute: 16,   // +16 px/s pro Minute
+obstacleDelayMs: 2000,
+enemyDelayMs: 4500,
+itemDelayMs: 7200,
+maxExtraSpeed: 120
+}
 };
 
 const AudioCfg = { bgmVol: 0.25, sfxVol: 0.6 };
-const GROUND_H = 56;
 
 const PLAYER_SCALE = 0.95;
 
@@ -45,31 +54,35 @@ const BONUS_ITEMS = [
 class GameScene extends Phaser.Scene {
 constructor() {
 super('game');
-this.state = {
-words: [],
-worldSpeed: Tuning.initialSpeed,
-score: 0,
-correctChars: 0,
-errors: 0,
-startTime: 0,
-clears: 0,
-target: null,
-typedIndex: 0,
-jumpTriggerX: {},
-idCounter: 1,
-gameOver: false,
-eventLog: []
-};
-this.groups = {};
-this.sounds = {};
-this.ui = {};
-this.presenter = {};
+this.levelName = localStorage.getItem('jnt_level') || 'mittel';
+this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
+
+  this.state = {
+    words: [],
+    worldSpeed: this.level.initialSpeed,
+    score: 0,
+    correctChars: 0,
+    errors: 0,
+    startTime: 0,
+    clears: 0,
+    target: null,
+    typedIndex: 0,
+    jumpTriggerX: {},
+    idCounter: 1,
+    gameOver: false,
+    eventLog: []
+  };
+
+  this.groups = {};
+  this.sounds = {};
+  this.ui = {};
+  this.presenter = {};
 }
 
 preload() {
   this.load.text('woerter', 'woerter.txt');
 
-  // Spieler & Presenter – Einzelbilder für Animation
+  // Animationsframes (Einzelbilder)
   this.load.image('parrot1', 'assets/characters/parrot.png');
   this.load.image('parrot2', 'assets/characters/parrot2.png');
   this.load.image('parrot3', 'assets/characters/parrot3.png');
@@ -77,11 +90,9 @@ preload() {
   this.load.image('pigeon1', 'assets/characters/pigeon.png');
   this.load.image('pigeon2', 'assets/characters/pigeon2.png');
   this.load.image('pigeon3', 'assets/characters/pigeon3.png');
-  // Fallbacks, falls die Dateien „pigeons2.png“ / „pigeons3.png“ heißen
-  this.load.image('pigeon2_alt', 'assets/characters/pigeons2.png');
-  this.load.image('pigeon3_alt', 'assets/characters/pigeons3.png');
+  this.load.image('pigeon2_alt', 'assets/characters/pigeons2.png'); // optional
+  this.load.image('pigeon3_alt', 'assets/characters/pigeons3.png'); // optional
 
-  // Hindernisse/Gegner/Items
   PIRATE_OBSTACLES.forEach(o => this.load.image(o.key, o.path));
   PIRATE_ENEMIES.forEach(e => this.load.image(e.key, e.path));
   BONUS_ITEMS.forEach(i => this.load.image(i.key, i.path));
@@ -91,7 +102,7 @@ preload() {
   this.load.audio('sfx_jump',  'assets/sounds/jump.mp3');
   this.load.audio('bgm',       'assets/sounds/bgm.mp3');
 
-  // Platzhalter-Texturen
+  // Platzhalter + Sprechblase
   const g = this.make.graphics({ x: 0, y: 0, add: false });
   g.fillStyle(0x3fa34c).fillRect(0, 0, WIDTH, GROUND_H);
   g.generateTexture('groundVis', WIDTH, GROUND_H); g.clear();
@@ -99,8 +110,6 @@ preload() {
   g.generateTexture('groundPhys', WIDTH, GROUND_H); g.clear();
   g.fillStyle(0xffb300).fillRoundedRect(0, 0, 38, 38, 6);
   g.generateTexture('ph_player', 38, 38); g.clear();
-
-  // Sprechblase
   const bubbleW = 300, bubbleH = 68;
   g.fillStyle(0xffffff, 0.9);
   g.fillRoundedRect(0, 0, bubbleW, bubbleH, 12);
@@ -113,7 +122,7 @@ preload() {
 
 create() {
   this.cameras.main.setBackgroundColor('#7ec4ff');
-  this.physics.world.gravity.y = Tuning.gravityY;
+  this.physics.world.gravity.y = 2000;
 
   // Wörter
   const raw = this.cache.text.get('woerter') || '';
@@ -128,18 +137,15 @@ create() {
   const physGround = this.physics.add.staticImage(WIDTH/2, HEIGHT - GROUND_H/2, 'groundPhys').setAlpha(0);
   this.ground = physGround;
 
-  // Animationen anlegen
-  // Parrot
+  // Animationen
   const parrotFrames = [
     { key: this.textures.exists('parrot1') ? 'parrot1' : 'ph_player' },
     { key: this.textures.exists('parrot2') ? 'parrot2' : (this.textures.exists('parrot1') ? 'parrot1' : 'ph_player') },
     { key: this.textures.exists('parrot3') ? 'parrot3' : (this.textures.exists('parrot2') ? 'parrot2' : (this.textures.exists('parrot1') ? 'parrot1' : 'ph_player')) }
   ];
-  this.anims.create({ key: 'parrot_idle', frames: [parrotFrames[0]], frameRate: 1, repeat: -1 });
   this.anims.create({ key: 'parrot_run',  frames: parrotFrames, frameRate: 6, repeat: -1 });
   this.anims.create({ key: 'parrot_jump', frames: [parrotFrames[1]], frameRate: 1, repeat: -1 });
 
-  // Pigeon (mit Fallbacks für „pigeons2/3“)
   const p2Key = this.textures.exists('pigeon2') ? 'pigeon2' : (this.textures.exists('pigeon2_alt') ? 'pigeon2_alt' : 'pigeon1');
   const p3Key = this.textures.exists('pigeon3') ? 'pigeon3' : (this.textures.exists('pigeon3_alt') ? 'pigeon3_alt' : p2Key);
   const pigeonFrames = [
@@ -150,17 +156,17 @@ create() {
   ];
   this.anims.create({ key: 'pigeon_talk', frames: pigeonFrames, frameRate: 3, yoyo: true, repeat: -1 });
 
-  // Spieler als Sprite (für Animation)
-  const playerKey = this.textures.exists('parrot1') ? 'parrot1' : 'ph_player';
+  // Spieler
+  const playerStartKey = this.textures.exists('parrot1') ? 'parrot1' : 'ph_player';
   const playerY = HEIGHT - GROUND_H - 40;
-  this.player = this.physics.add.sprite(140, playerY, playerKey);
+  this.player = this.physics.add.sprite(140, playerY, playerStartKey);
   this.player.setScale(PLAYER_SCALE);
   this.player.setCollideWorldBounds(true);
   this.player.body.setSize(this.player.displayWidth * 0.6, this.player.displayHeight * 0.7);
   this.player.body.setOffset(this.player.displayWidth * 0.2, this.player.displayHeight * 0.15);
   this.player.body.setMaxVelocityY(1200);
   this.physics.add.collider(this.player, physGround);
-  this.player.anims.play('parrot_run'); // Startanimation
+  this.player.anims.play('parrot_run');
 
   // Sounds
   this.sounds.kling = this.sound.add('sfx_kling', { volume: AudioCfg.sfxVol });
@@ -192,7 +198,7 @@ create() {
   this.ui.msg = this.add.text(WIDTH/2, HEIGHT/2, '', { fontFamily: 'system-ui', fontSize: 28, color: '#083056' })
     .setOrigin(0.5).setDepth(20).setAlpha(0);
 
-  // Präsentations‑Vogel weiter oben als Sprite mit „sprechender“ Animation
+  // Präsentations‑Vogel oben
   const PigeonPos = { x: 90, y: HEIGHT - GROUND_H - 190 };
   const pigeonStartKey = this.textures.exists('pigeon1') ? 'pigeon1' : 'ph_player';
   this.presenter.pigeon = this.add.sprite(PigeonPos.x, PigeonPos.y, pigeonStartKey).setScale(0.9).setDepth(0);
@@ -202,23 +208,31 @@ create() {
     fontFamily: 'monospace', fontSize: 20, color: '#083056'
   }).setOrigin(0.5).setDepth(10);
 
-  // Eingabe: M = alle Sounds, Shift+M = nur Musik
+  // Eingabe: Sound-Toggles und Tippen
   this.input.keyboard.on('keydown', (e) => {
     const k = (e.key || '').toLowerCase();
-    if (k === 'm' && e.shiftKey) {
+    if (k === 'm' && e.shiftKey) { // nur Musik
       if (this.sounds.bgm) { this.sounds.bgm.mute = !this.sounds.bgm.mute; this.toast(this.sounds.bgm.mute ? 'Musik aus' : 'Musik an'); }
       return;
     }
-    if (k === 'm') { this.sound.mute = !this.sound.mute; this.toast(this.sound.mute ? 'Sound aus' : 'Sound an'); return; }
+    if (k === 'm') { // alle Sounds
+      this.sound.mute = !this.sound.mute;
+      this.toast(this.sound.mute ? 'Sound aus' : 'Sound an');
+      return;
+    }
     this.handleKey(e);
   });
 
-  // Spawner
-  this.spawnTimerObstacles = this.time.addEvent({ delay: Tuning.obstacleDelayMs, loop: true, callback: () => this.spawnObstacle() });
-  this.time.delayedCall(Tuning.enemyStartDelayMs, () => {
-    this.spawnTimerEnemies = this.time.addEvent({ delay: Tuning.enemyDelayMs, loop: true, callback: () => this.spawnEnemy() });
+  // Spawner mit Level-Werten
+  this.spawnTimerObstacles = this.time.addEvent({
+    delay: this.level.obstacleDelayMs, loop: true, callback: () => this.spawnObstacle()
   });
-  this.spawnTimerItems = this.time.addEvent({ delay: Tuning.itemDelayMs, loop: true, callback: () => this.spawnItem() });
+  this.spawnTimerEnemies = this.time.addEvent({
+    delay: this.level.enemyDelayMs, loop: true, callback: () => this.spawnEnemy()
+  });
+  this.spawnTimerItems = this.time.addEvent({
+    delay: this.level.itemDelayMs, loop: true, callback: () => this.spawnItem()
+  });
 
   // Direkt etwas spawnen
   this.spawnObstacle();
@@ -228,6 +242,29 @@ create() {
   this.updateHUD();
   this.updatePointsLog();
   this.updatePresenterWord();
+
+  // Level-Buttons anbinden (außerhalb des Spiels)
+  this.setupLevelButtons();
+}
+
+setupLevelButtons() {
+  const ids = { einfach: 'level-einfach', mittel: 'level-mittel', schnell: 'level-schnell' };
+  const current = this.levelName;
+  Object.values(ids).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  const curEl = document.getElementById(ids[current]);
+  curEl && curEl.classList.add('active');
+
+  Object.entries(ids).forEach(([name, id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.onclick = () => {
+      localStorage.setItem('jnt_level', name);
+      this.scene.restart(); // liest den neuen Level in constructor erneut
+    };
+  });
 }
 
 ensureTexture(key, fallback) { return this.textures.exists(key) ? key : fallback; }
@@ -272,7 +309,7 @@ spawnEnemy() {
 
   const sprite = this.groups.enemies.create(x, altitude, def.key);
   sprite.setScale(def.scale).setImmovable(true);
-  sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.enemySpeedFactor);
+  sprite.body.setVelocityX(-this.state.worldSpeed * 1.02);
   sprite.destroyed = false; sprite.type = 'enemy'; sprite.id = id;
 
   const word = this.nextWord({ preferShort: true });
@@ -298,7 +335,7 @@ spawnItem() {
 
   const sprite = this.groups.items.create(x, altitude, def.key);
   sprite.setScale(def.scale).setImmovable(true);
-  sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor);
+  sprite.body.setVelocityX(-this.state.worldSpeed);
   sprite.type = 'item'; sprite.id = id; sprite.word = def.word; sprite.points = def.points;
   sprite.readyToCollect = false;
 
@@ -405,7 +442,7 @@ onWordCompleted(target) {
   if (target.type === 'obstacle') {
     target.cleared = true;
     target.body.checkCollision.none = true;
-    const triggerX = (target.x - target.displayWidth / 2) - Tuning.preJumpDistancePx;
+    const triggerX = (target.x - target.displayWidth / 2) - 56; // früherer Sprung
     this.state.jumpTriggerX[target.id] = triggerX;
     this.addPoints('Hindernis', 10);
   } else if (target.type === 'enemy') {
@@ -413,18 +450,12 @@ onWordCompleted(target) {
     this.addPoints('Gegner', 20);
   } else if (target.type === 'item') {
     target.readyToCollect = true;
-    const triggerX = (target.x - target.displayWidth / 2) - Tuning.preJumpDistancePx;
+    const triggerX = (target.x - target.displayWidth / 2) - 56;
     this.state.jumpTriggerX[target.id] = triggerX;
     this.collectItem(target);
   }
 
   this.state.clears++;
-  if (this.state.clears % Tuning.speedStepEvery === 0) {
-    this.state.worldSpeed += Tuning.speedStep;
-    this.adjustWorldSpeed();
-    this.toast(`Schneller! Speed ${Math.round(this.state.worldSpeed)}px/s`);
-  }
-
   this.state.target = null;
   this.updatePresenterWord();
   this.chooseTarget();
@@ -451,9 +482,10 @@ destroyEnemy(enemy) {
 }
 
 adjustWorldSpeed() {
-  this.groups.obstacles.getChildren().forEach(o => { if (o.active) o.body.setVelocityX(-this.state.worldSpeed); });
-  this.groups.enemies.getChildren().forEach(e => { if (e.active) e.body.setVelocityX(-this.state.worldSpeed * Tuning.enemySpeedFactor); });
-  this.groups.items.getChildren().forEach(i => { if (i.active) i.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor); });
+  const v = -this.state.worldSpeed;
+  this.groups.obstacles.getChildren().forEach(o => { if (o.active) o.body.setVelocityX(v); });
+  this.groups.enemies.getChildren().forEach(e => { if (e.active) e.body.setVelocityX(v * 1.02); });
+  this.groups.items.getChildren().forEach(i => { if (i.active) i.body.setVelocityX(v); });
 }
 
 flashWord() { this.cameras.main.flash(80, 247, 118, 142, false); }
@@ -461,7 +493,7 @@ flashWord() { this.cameras.main.flash(80, 247, 118, 142, false); }
 update() {
   if (this.state.gameOver) return;
 
-  // Lauf-/Sprunganimation steuern
+  // Lauf-/Sprunganimation
   if (this.player.body.onFloor()) {
     if (this.player.anims.currentAnim?.key !== 'parrot_run') this.player.anims.play('parrot_run', true);
   } else {
@@ -485,7 +517,15 @@ update() {
     if (i.x < -100) { i.label && i.label.destroy(); i.destroy(); }
   });
 
-  // Auto-Sprung (früher, plus Sicherheitsfenster)
+  // Sanfte Beschleunigung über Spielzeit
+  const minutes = (performance.now() - this.state.startTime) / 60000;
+  const targetSpeed = this.level.initialSpeed + Math.min(this.level.maxExtraSpeed, this.level.accelPerMinute * minutes);
+  if (Math.abs(targetSpeed - this.state.worldSpeed) > 0.5) {
+    this.state.worldSpeed = targetSpeed;
+    this.adjustWorldSpeed();
+  }
+
+  // Auto-Sprung (Sicherheitsfenster)
   const playerFront = this.player.body.x + this.player.body.width;
   const safeWindow = 14;
   Object.keys(this.state.jumpTriggerX).forEach(idStr => {
@@ -496,12 +536,12 @@ update() {
     const leftEdge = obj.x - obj.displayWidth / 2;
 
     if (playerFront >= triggerX - safeWindow && this.player.body.onFloor()) {
-      this.player.setVelocityY(-Tuning.jumpStrength);
+      this.player.setVelocityY(-720);
       this.sounds.jump && this.sounds.jump.play();
       delete this.state.jumpTriggerX[id];
     }
     if (playerFront > leftEdge + 6 && this.player.body.onFloor() && this.state.jumpTriggerX[id]) {
-      this.player.setVelocityY(-Tuning.jumpStrength);
+      this.player.setVelocityY(-720);
       this.sounds.jump && this.sounds.jump.play();
       delete this.state.jumpTriggerX[id];
     }
@@ -525,7 +565,8 @@ updateHUD() {
   const acc = (this.state.correctChars + this.state.errors) > 0
     ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
     : 100;
-  this.ui.hud.setText(`Score: ${this.state.score}   WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}`);
+  const speed = Math.round(this.state.worldSpeed);
+  this.ui.hud.setText(`Score: ${this.state.score}   WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}   Speed: ${speed}`);
 }
 
 toast(msg) {
@@ -549,7 +590,7 @@ gameOver(reason) {
     ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
     : 100;
 
-  const entry = { ts: Date.now(), score: this.state.score, wpm, acc, clears: this.state.clears, log: this.state.eventLog };
+  const entry = { ts: Date.now(), score: this.state.score, wpm, acc, clears: this.state.clears, log: this.state.eventLog, level: this.levelName };
   const hist = JSON.parse(localStorage.getItem('jnt_history') || '[]');
   hist.push(entry);
   localStorage.setItem('jnt_history', JSON.stringify(hist));
@@ -558,7 +599,7 @@ gameOver(reason) {
   const lines = [
     `Game Over`,
     `${reason}`,
-    `Score: ${this.state.score} | WPM: ${wpm} | Genauigkeit: ${acc}% | Clears: ${this.state.clears}`,
+    `Score: ${this.state.score} | WPM: ${wpm} | Genauigkeit: ${acc}% | Clears: ${this.state.clears} | Level: ${this.levelName}`,
     `Letzte Punkte:`,
     ...this.state.eventLog.slice(-6).map(e => `+${e.pts} ${e.reason}`),
     `Drücke R oder Enter, oder klicke, um neu zu starten`
@@ -584,7 +625,7 @@ height: HEIGHT,
 parent: 'game',
 backgroundColor: '#7ec4ff',
 render: { pixelArt: true, antialias: false },
-physics: { default: 'arcade', arcade: { gravity: { y: Tuning.gravityY }, debug: false } },
+physics: { default: 'arcade', arcade: { gravity: { y: 2000 }, debug: false } },
 scene: [GameScene]
 };
 
