@@ -3,36 +3,14 @@ const WIDTH = 960;
 const HEIGHT = 540;
 const GROUND_H = 56;
 
-// Level-Presets: Basis-Tempo, sanfte Beschleunigung pro Minute und Spawn-Intervalle
+// Level-Presets: behutsame Beschleunigung
 const LevelPresets = {
-einfach: {
-initialSpeed: 150,
-accelPerMinute: 8,    // +8 px/s pro Minute
-obstacleDelayMs: 2800,
-enemyDelayMs: 6000,
-itemDelayMs: 9000,
-maxExtraSpeed: 80     // Deckel über Initial (behutsam)
-},
-mittel: {
-initialSpeed: 180,
-accelPerMinute: 12,   // +12 px/s pro Minute
-obstacleDelayMs: 2400,
-enemyDelayMs: 5200,
-itemDelayMs: 8000,
-maxExtraSpeed: 100
-},
-schnell: {
-initialSpeed: 220,
-accelPerMinute: 16,   // +16 px/s pro Minute
-obstacleDelayMs: 2000,
-enemyDelayMs: 4500,
-itemDelayMs: 7200,
-maxExtraSpeed: 120
-}
+einfach: { initialSpeed: 150, accelPerMinute: 8,  obstacleDelayMs: 2800, enemyDelayMs: 6000, itemDelayMs: 9000, maxExtraSpeed: 80 },
+mittel:  { initialSpeed: 180, accelPerMinute: 12, obstacleDelayMs: 2400, enemyDelayMs: 5200, itemDelayMs: 8000, maxExtraSpeed: 100 },
+schnell: { initialSpeed: 220, accelPerMinute: 16, obstacleDelayMs: 2000, enemyDelayMs: 4500, itemDelayMs: 7200, maxExtraSpeed: 120 }
 };
 
 const AudioCfg = { bgmVol: 0.25, sfxVol: 0.6 };
-
 const PLAYER_SCALE = 0.95;
 
 const PIRATE_OBSTACLES = [
@@ -54,8 +32,10 @@ const BONUS_ITEMS = [
 class GameScene extends Phaser.Scene {
 constructor() {
 super('game');
-this.levelName = localStorage.getItem('jnt_level') || 'mittel';
-this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
+
+  // Level aus localStorage
+  this.levelName = localStorage.getItem('jnt_level') || 'mittel';
+  this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
 
   this.state = {
     words: [],
@@ -63,7 +43,7 @@ this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
     score: 0,
     correctChars: 0,
     errors: 0,
-    startTime: 0,
+    startTime: performance.now(),
     clears: 0,
     target: null,
     typedIndex: 0,
@@ -90,8 +70,7 @@ preload() {
   this.load.image('pigeon1', 'assets/characters/pigeon.png');
   this.load.image('pigeon2', 'assets/characters/pigeon2.png');
   this.load.image('pigeon3', 'assets/characters/pigeon3.png');
-  this.load.image('pigeon2_alt', 'assets/characters/pigeons2.png'); // optional
-  this.load.image('pigeon3_alt', 'assets/characters/pigeons3.png'); // optional
+  // Hinweis: keine pigeons*.png mehr, wie gewünscht
 
   PIRATE_OBSTACLES.forEach(o => this.load.image(o.key, o.path));
   PIRATE_ENEMIES.forEach(e => this.load.image(e.key, e.path));
@@ -121,15 +100,17 @@ preload() {
 }
 
 create() {
+  // Bugfix: Welt sicher aktiv
+  this.physics.world.resume();
+  this.state.gameOver = false;
+
   this.cameras.main.setBackgroundColor('#7ec4ff');
   this.physics.world.gravity.y = 2000;
 
   // Wörter
   const raw = this.cache.text.get('woerter') || '';
   this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
-  if (this.state.words.length === 0) {
-    this.state.words = ['muenze','herz','schatz','uhr','lauf','spring'];
-  }
+  if (this.state.words.length === 0) this.state.words = ['muenze','herz','schatz','uhr','lauf','spring'];
   Phaser.Utils.Array.Shuffle(this.state.words);
 
   // Boden
@@ -146,8 +127,8 @@ create() {
   this.anims.create({ key: 'parrot_run',  frames: parrotFrames, frameRate: 6, repeat: -1 });
   this.anims.create({ key: 'parrot_jump', frames: [parrotFrames[1]], frameRate: 1, repeat: -1 });
 
-  const p2Key = this.textures.exists('pigeon2') ? 'pigeon2' : (this.textures.exists('pigeon2_alt') ? 'pigeon2_alt' : 'pigeon1');
-  const p3Key = this.textures.exists('pigeon3') ? 'pigeon3' : (this.textures.exists('pigeon3_alt') ? 'pigeon3_alt' : p2Key);
+  const p2Key = this.textures.exists('pigeon2') ? 'pigeon2' : 'pigeon1';
+  const p3Key = this.textures.exists('pigeon3') ? 'pigeon3' : p2Key;
   const pigeonFrames = [
     { key: this.textures.exists('pigeon1') ? 'pigeon1' : 'ph_player' },
     { key: p2Key },
@@ -192,33 +173,31 @@ create() {
   });
 
   // HUD
-  this.ui.hud = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#083056' }).setDepth(10);
+  this.ui.hud = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#083056' }).setDepth(50);
   this.ui.log = this.add.text(WIDTH - 12, 10, 'Punkte-Log:', { fontFamily: 'monospace', fontSize: 14, color: '#083056', align: 'right' })
-    .setOrigin(1, 0).setDepth(10);
+    .setOrigin(1, 0).setDepth(50);
   this.ui.msg = this.add.text(WIDTH/2, HEIGHT/2, '', { fontFamily: 'system-ui', fontSize: 28, color: '#083056' })
-    .setOrigin(0.5).setDepth(20).setAlpha(0);
+    .setOrigin(0.5).setDepth(100).setAlpha(0);
 
-  // Präsentations‑Vogel oben
-  const PigeonPos = { x: 90, y: HEIGHT - GROUND_H - 190 };
+  // Präsentations‑Vogel oben und seitlich, Sprechblase deutlich darüber
+  const PigeonPos = { x: 110, y: HEIGHT - GROUND_H - 200 };
   const pigeonStartKey = this.textures.exists('pigeon1') ? 'pigeon1' : 'ph_player';
-  this.presenter.pigeon = this.add.sprite(PigeonPos.x, PigeonPos.y, pigeonStartKey).setScale(0.9).setDepth(0);
+  this.presenter.pigeon = this.add.sprite(PigeonPos.x, PigeonPos.y, pigeonStartKey).setScale(0.9).setDepth(40);
   this.presenter.pigeon.anims.play('pigeon_talk');
-  this.presenter.bubble = this.add.image(PigeonPos.x + 140, PigeonPos.y - 20, 'bubble').setDepth(9);
-  this.presenter.text = this.add.text(PigeonPos.x + 140, PigeonPos.y - 28, '', {
+  // Sprechblase höher und etwas rechts, damit der Vogel sichtbar bleibt
+  this.presenter.bubble = this.add.image(PigeonPos.x + 170, PigeonPos.y - 80, 'bubble').setDepth(41);
+  this.presenter.text = this.add.text(PigeonPos.x + 170, PigeonPos.y - 88, '', {
     fontFamily: 'monospace', fontSize: 20, color: '#083056'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(42);
 
-  // Eingabe: Sound-Toggles und Tippen
+  // Eingabe: nur Shift+M zum Muten (kein Konflikt mit „m“ beim Tippen)
   this.input.keyboard.on('keydown', (e) => {
-    const k = (e.key || '').toLowerCase();
-    if (k === 'm' && e.shiftKey) { // nur Musik
-      if (this.sounds.bgm) { this.sounds.bgm.mute = !this.sounds.bgm.mute; this.toast(this.sounds.bgm.mute ? 'Musik aus' : 'Musik an'); }
-      return;
-    }
-    if (k === 'm') { // alle Sounds
-      this.sound.mute = !this.sound.mute;
-      this.toast(this.sound.mute ? 'Sound aus' : 'Sound an');
-      return;
+    if (e.shiftKey && (e.key || '').toLowerCase() === 'm') {
+      const newMute = !this.sound.mute;
+      this.sound.mute = newMute;
+      if (this.sounds.bgm) this.sounds.bgm.mute = newMute; // zur Sicherheit auch Musik toggeln
+      this.toast(newMute ? 'Alle Sounds aus' : 'Alle Sounds an');
+      return; // nicht als Eingabe für das Wort verarbeiten
     }
     this.handleKey(e);
   });
@@ -249,20 +228,15 @@ create() {
 
 setupLevelButtons() {
   const ids = { einfach: 'level-einfach', mittel: 'level-mittel', schnell: 'level-schnell' };
-  const current = this.levelName;
-  Object.values(ids).forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('active');
-  });
-  const curEl = document.getElementById(ids[current]);
-  curEl && curEl.classList.add('active');
+  Object.values(ids).forEach(id => document.getElementById(id)?.classList.remove('active'));
+  document.getElementById(ids[this.levelName])?.classList.add('active');
 
   Object.entries(ids).forEach(([name, id]) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.onclick = () => {
       localStorage.setItem('jnt_level', name);
-      this.scene.restart(); // liest den neuen Level in constructor erneut
+      this.scene.restart(); // Level wird im constructor neu eingelesen
     };
   });
 }
@@ -290,7 +264,8 @@ spawnObstacle() {
   sprite.word = word;
   sprite.label = this.add.text(x, y - sprite.displayHeight / 2 - 20, word, {
     fontFamily: 'monospace', fontSize: 18, color: '#083056'
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(30);
+
   if (!this.state.target) this.chooseTarget(); else this.updatePresenterWord();
 }
 
@@ -303,9 +278,7 @@ spawnEnemy() {
   const hPix = temp.displayHeight; temp.destroy();
 
   const groundY = HEIGHT - GROUND_H;
-  const altitude = def.type === 'ground'
-    ? (groundY - hPix / 2)
-    : (groundY - GROUND_H - Phaser.Math.Between(100, 160));
+  const altitude = def.type === 'ground' ? (groundY - hPix / 2) : (groundY - GROUND_H - Phaser.Math.Between(100, 160));
 
   const sprite = this.groups.enemies.create(x, altitude, def.key);
   sprite.setScale(def.scale).setImmovable(true);
@@ -316,7 +289,8 @@ spawnEnemy() {
   sprite.word = word;
   sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, word, {
     fontFamily: 'monospace', fontSize: 18, color: '#9b2c2c'
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(30);
+
   if (!this.state.target) this.chooseTarget(); else this.updatePresenterWord();
 }
 
@@ -329,9 +303,7 @@ spawnItem() {
   const hPix = temp.displayHeight; temp.destroy();
 
   const groundY = HEIGHT - GROUND_H;
-  const altitude = Phaser.Math.Between(0, 1)
-    ? (groundY - hPix / 2)
-    : (groundY - GROUND_H - Phaser.Math.Between(90, 150));
+  const altitude = Phaser.Math.Between(0, 1) ? (groundY - hPix / 2) : (groundY - GROUND_H - Phaser.Math.Between(90, 150));
 
   const sprite = this.groups.items.create(x, altitude, def.key);
   sprite.setScale(def.scale).setImmovable(true);
@@ -341,7 +313,8 @@ spawnItem() {
 
   sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, def.word, {
     fontFamily: 'monospace', fontSize: 18, color: '#0b315a'
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(30);
+
   if (!this.state.target) this.chooseTarget(); else this.updatePresenterWord();
 }
 
@@ -383,7 +356,7 @@ handleKey(e) {
   if (this.state.gameOver) return;
   if (!this.state.target) return;
   const key = e.key;
-  if (!key || key.length !== 1) return;
+  if (!key || key.length !== 1) return; // nur echte Zeichen
 
   const expected = this.normalize(this.state.target.word[this.state.typedIndex] || '');
   const got = this.normalize(key);
@@ -500,6 +473,14 @@ update() {
     if (this.player.anims.currentAnim?.key !== 'parrot_jump') this.player.anims.play('parrot_jump', true);
   }
 
+  // Sanfte Beschleunigung
+  const minutes = (performance.now() - this.state.startTime) / 60000;
+  const targetSpeed = this.level.initialSpeed + Math.min(this.level.maxExtraSpeed, this.level.accelPerMinute * minutes);
+  if (Math.abs(targetSpeed - this.state.worldSpeed) > 0.5) {
+    this.state.worldSpeed = targetSpeed;
+    this.adjustWorldSpeed();
+  }
+
   // Labels folgen + Offscreen aufräumen
   this.groups.obstacles.getChildren().forEach(o => {
     if (!o.active) return;
@@ -516,14 +497,6 @@ update() {
     if (i.label) { i.label.x = i.x; i.label.y = i.y - i.displayHeight / 2 - 18; }
     if (i.x < -100) { i.label && i.label.destroy(); i.destroy(); }
   });
-
-  // Sanfte Beschleunigung über Spielzeit
-  const minutes = (performance.now() - this.state.startTime) / 60000;
-  const targetSpeed = this.level.initialSpeed + Math.min(this.level.maxExtraSpeed, this.level.accelPerMinute * minutes);
-  if (Math.abs(targetSpeed - this.state.worldSpeed) > 0.5) {
-    this.state.worldSpeed = targetSpeed;
-    this.adjustWorldSpeed();
-  }
 
   // Auto-Sprung (Sicherheitsfenster)
   const playerFront = this.player.body.x + this.player.body.width;
