@@ -2,7 +2,7 @@
 const WIDTH = 960;
 const HEIGHT = 540;
 
-// Tuning: Tempo, Physik, Spawns, Parallax
+// Tuning: Tempo, Physik, Spawns
 const Tuning = {
 initialSpeed: 180,
 speedStep: 10,
@@ -13,41 +13,40 @@ enemyStartDelayMs: 20000,
 enemyDelayMs: 5200,
 enemySpeedFactor: 1.02,
 
+itemDelayMs: 8000,       // Bonus-Items (Münze/Herz/Schatz/Uhr)
+itemSpeedFactor: 1.0,
+
 gravityY: 2000,
 jumpStrength: 720,
-preJumpDistancePx: 36,
-
-runFrameRate: 6,
-
-enemyPreferShortMaxLen: 6,
-
-parallax: { sky: 0.08, far: 0.18, mid: 0.35, ground: 1.0 },
-
-treeSpawnDelayMs: 5000,
-treeSpeedFactor: 1.0
+preJumpDistancePx: 42,   // etwas früher springen als bisher
 
 };
 
 const GROUND_H = 56;
 
-// Spieler-Spritesheet (wie zuvor)
-const PLAYER_FRAME_W = 32;
-const PLAYER_FRAME_H = 32;
-const PLAYER_SCALE = 1.6;
+// Spieler: Piratenvogel (Einzelbild)
+const PLAYER_SCALE = 1.2;
 
-// Piraten-Assets: Skalen pro Typ (optisch passend, Kollision fair)
+// Hindernisse: kleinere Fässer, Dornen
 const PIRATE_OBSTACLES = [
-{ key: 'pirate_barrel', path: 'assets/obstacles/barrel.png', scale: 0.8 },
-{ key: 'pirate_thorn_big', path: 'assets/obstacles/big_thorns.png', scale: 0.8 },
-{ key: 'pirate_thorn_small', path: 'assets/obstacles/small_thorn.png', scale: 0.9 }
-];
-const PIRATE_ENEMIES = [
-{ key: 'pirate_crab', path: 'assets/environment/crab.png', scale: 1.0, type: 'ground' },
-{ key: 'pirate_parrot', path: 'assets/characters/parrot.png', scale: 0.9, type: 'air' }
+{ key: 'pirate_barrel', path: 'assets/obstacles/barrel.png', scale: 0.68 }, // kleiner als vorher
+{ key: 'pirate_thorn_big', path: 'assets/obstacles/big_thorns.png', scale: 0.78 },
+{ key: 'pirate_thorn_small', path: 'assets/obstacles/small_thorn.png', scale: 0.86 }
 ];
 
-const ENEMY_LABEL_COLOR = '#FFE4E6';
-const OBST_LABEL_COLOR = '#ECEFF4';
+// Gegnerinnen/Gegner (optional: Krabbe am Boden oder Papagei in der Luft)
+const PIRATE_ENEMIES = [
+{ key: 'pirate_crab', path: 'assets/environment/crab.png', scale: 0.95, type: 'ground' },
+{ key: 'pirate_parrot_enemy', path: 'assets/characters/parrot.png', scale: 0.9, type: 'air' }
+];
+
+// Bonus-Items
+const BONUS_ITEMS = [
+{ key: 'item_coin', path: 'assets/items/coin.png', scale: 0.9, word: 'muenze', points: 50 },
+{ key: 'item_heart', path: 'assets/items/heart.png', scale: 0.9, word: 'herz', points: 50 },
+{ key: 'item_chest', path: 'assets/items/chest.png', scale: 0.9, word: 'schatz', points: 75 },
+{ key: 'item_compass', path: 'assets/items/compass.png', scale: 0.9, word: 'uhr', points: 50 }
+];
 
 class GameScene extends Phaser.Scene {
 constructor() {
@@ -55,50 +54,57 @@ super('game');
 this.state = {
 words: [],
 worldSpeed: Tuning.initialSpeed,
+score: 0,
 correctChars: 0,
 errors: 0,
 startTime: 0,
 clears: 0,
 target: null,
 typedIndex: 0,
-readyToJumpForId: null,
+// Auto-Sprung: Trigger‑X pro Hindernis
+jumpTriggerX: {},    // id -> x, an der gesprungen wird
 idCounter: 1
 };
 this.groups = {};
-this.layers = {};
+this.hudText = null;
+this.wordText = null;
+this.msgText = null;
+this.runTween = null;
 }
 
 preload() {
   // Wortliste
   this.load.text('woerter', 'woerter.txt');
 
-  // Spieler
-  this.load.spritesheet('player', 'sprites/player.png', {
-    frameWidth: PLAYER_FRAME_W,
-    frameHeight: PLAYER_FRAME_H
-  });
+  // Spielerbild (Piratenvogel)
+  this.load.image('player_parrot', 'assets/characters/parrot.png');
 
-  // Hintergrund (wie zuvor, unverändert)
-  this.load.image('bg_sky', 'sprites/bg_sky.png');
-  this.load.image('bg_mountains_mid', 'sprites/bg_mountains_mid.png');
-  this.load.image('bg_mountains_far', 'sprites/bg_mountains_far.png');
-  this.load.image('bg_ground', 'sprites/bg_ground.png');
-
-  // Piraten-Hindernisse
+  // Hindernisse
   PIRATE_OBSTACLES.forEach(o => this.load.image(o.key, o.path));
 
-  // Piraten-Gegnerinnen/Gegner
+  // Gegnerinnen/Gegner
   PIRATE_ENEMIES.forEach(e => this.load.image(e.key, e.path));
 
-  // Physischer Boden (unsichtbar)
+  // Bonus-Items
+  BONUS_ITEMS.forEach(i => this.load.image(i.key, i.path));
+
+  // Physischer Boden (unsichtbar) + sichtbarer Bodenstreifen
   const g = this.make.graphics({ x: 0, y: 0, add: false });
   g.fillStyle(0x000000);
   g.fillRect(0, 0, WIDTH, GROUND_H);
   g.generateTexture('groundPhys', WIDTH, GROUND_H);
+  g.clear();
+
+  // Sichtbarer Bodenstreifen (einfaches Grün)
+  g.fillStyle(0x3fa34c);
+  g.fillRect(0, 0, WIDTH, GROUND_H);
+  g.generateTexture('groundVis', WIDTH, GROUND_H);
   g.destroy();
 }
 
 create() {
+  // Blau als Spielhintergrund
+  this.cameras.main.setBackgroundColor('#7ec4ff');
   this.physics.world.gravity.y = Tuning.gravityY;
 
   // Wörter
@@ -106,54 +112,58 @@ create() {
   this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
   Phaser.Utils.Array.Shuffle(this.state.words);
 
-  // Parallax-Layer
-  this.layers.sky = this.add.tileSprite(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT, 'bg_sky').setDepth(-30);
-  this.layers.far = this.add.tileSprite(WIDTH/2, HEIGHT*0.42, WIDTH, HEIGHT*0.5, 'bg_mountains_far').setDepth(-25);
-  this.layers.mid = this.add.tileSprite(WIDTH/2, HEIGHT*0.60, WIDTH, HEIGHT*0.55, 'bg_mountains_mid').setDepth(-20);
-  this.layers.ground = this.add.tileSprite(WIDTH/2, HEIGHT - GROUND_H/2, WIDTH, GROUND_H, 'bg_ground').setDepth(-10);
+  // Sichtbarer Boden
+  this.add.image(WIDTH/2, HEIGHT - GROUND_H/2, 'groundVis').setDepth(-1);
 
   // Physischer Boden
   const physGround = this.physics.add.staticImage(WIDTH/2, HEIGHT - GROUND_H/2, 'groundPhys').setAlpha(0);
   this.ground = physGround;
 
-  // Spieler
-  const playerY = HEIGHT - GROUND_H - (PLAYER_FRAME_H * PLAYER_SCALE) / 2;
-  this.player = this.physics.add.sprite(140, playerY, 'player', 0);
+  // Spieler (Piratenvogel)
+  const playerY = HEIGHT - GROUND_H - 40;
+  this.player = this.physics.add.image(140, playerY, 'player_parrot');
   this.player.setScale(PLAYER_SCALE);
   this.player.setCollideWorldBounds(true);
-  this.player.body.setSize(PLAYER_FRAME_W * 0.62, PLAYER_FRAME_H * 0.88);
-  this.player.body.setOffset(PLAYER_FRAME_W * 0.19, PLAYER_FRAME_H * 0.06);
+  // Kollisionsbox schlank
+  this.player.body.setSize(this.player.width * 0.6, this.player.height * 0.7);
+  this.player.body.setOffset(this.player.width * 0.2, this.player.height * 0.15);
   this.player.body.setMaxVelocityY(1200);
   this.physics.add.collider(this.player, physGround);
 
-  // Animationen Spieler
-  this.anims.create({ key: 'idle', frames: [{ key: 'player', frame: 0 }], frameRate: 1, repeat: -1 });
-  this.anims.create({
-    key: 'run',
-    frames: this.anims.generateFrameNumbers('player', { start: 0, end: 3 }),
-    frameRate: Tuning.runFrameRate, repeat: -1
+  // „Lauf“-Optik: sanftes Wippen am Boden (pausiert in der Luft)
+  this.runTween = this.tweens.add({
+    targets: this.player,
+    y: '+=2',
+    duration: 400,
+    yoyo: true,
+    repeat: -1,
+    paused: false
   });
-  this.anims.create({ key: 'jump', frames: [{ key: 'player', frame: 1 }], frameRate: 1, repeat: -1 });
-  this.player.anims.play('run', true);
 
   // Gruppen
   this.groups.obstacles = this.physics.add.group({ allowGravity: false });
   this.groups.enemies = this.physics.add.group({ allowGravity: false });
+  this.groups.items = this.physics.add.group({ allowGravity: false });
 
   // Kollisionen
   this.physics.add.collider(this.player, this.groups.obstacles, (player, obst) => {
+    // Nur wenn NICHT „cleared“ (also Wort nicht korrekt getippt)
     if (!obst.cleared) this.gameOver('Mit Hindernis kollidiert');
   });
   this.physics.add.overlap(this.player, this.groups.enemies, (player, enemy) => {
     if (!enemy.destroyed) this.gameOver('Von Gegner getroffen');
   });
+  // Items sind ungefährlich: Overlap = „einsammeln“, aber nur wenn bereits korrekt getippt
+  this.physics.add.overlap(this.player, this.groups.items, (player, item) => {
+    if (item.readyToCollect) this.collectItem(item);
+  });
 
   // HUD
-  this.hudText = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' })
+  this.hudText = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#083056' })
     .setScrollFactor(0).setDepth(10);
-  this.wordText = this.add.text(WIDTH/2, 10, '', { fontFamily: 'monospace', fontSize: 20, color: '#E5E9F0' })
+  this.wordText = this.add.text(WIDTH/2, 10, '', { fontFamily: 'monospace', fontSize: 20, color: '#0b315a' })
     .setOrigin(0.5, 0).setDepth(10);
-  this.msgText = this.add.text(WIDTH/2, HEIGHT/2, '', { fontFamily: 'system-ui', fontSize: 28, color: '#ffffff' })
+  this.msgText = this.add.text(WIDTH/2, HEIGHT/2, '', { fontFamily: 'system-ui', fontSize: 28, color: '#083056' })
     .setOrigin(0.5).setDepth(20).setAlpha(0);
 
   // Eingabe
@@ -168,20 +178,23 @@ create() {
       delay: Tuning.enemyDelayMs, loop: true, callback: () => this.spawnEnemy()
     });
   });
+  this.spawnTimerItems = this.time.addEvent({
+    delay: Tuning.itemDelayMs, loop: true, callback: () => this.spawnItem()
+  });
 
   this.state.startTime = performance.now();
   this.updateHUD();
 }
 
-// Hindernisse: Piraten-Fässer/Spikes
+// Spawner: Hindernis
 spawnObstacle() {
   const def = Phaser.Utils.Array.GetRandom(PIRATE_OBSTACLES);
   const id = this.state.idCounter++;
   const x = WIDTH + 120;
 
-  // temporär anlegen, um Größe nach Skalierung zu kennen
+  // Größe nach Skalierung bestimmen
   const temp = this.add.image(0, 0, def.key).setScale(def.scale);
-  const hPix = temp.displayHeight;
+  const wPix = temp.displayWidth, hPix = temp.displayHeight;
   temp.destroy();
 
   const y = HEIGHT - GROUND_H - hPix / 2;
@@ -189,31 +202,29 @@ spawnObstacle() {
   sprite.setScale(def.scale);
   sprite.setImmovable(true);
   sprite.body.setVelocityX(-this.state.worldSpeed);
-  // Kollision etwas schlanker
+  // faire Kollisionsbox
   sprite.body.setSize(sprite.displayWidth * 0.8, sprite.displayHeight * 0.85);
   sprite.body.setOffset(sprite.displayWidth * 0.1, sprite.displayHeight * 0.1);
 
   sprite.cleared = false;
   sprite.type = 'obstacle';
   sprite.id = id;
-  sprite.setDepth(0);
 
   const word = this.nextWord();
   sprite.word = word;
   sprite.label = this.add.text(x, y - sprite.displayHeight / 2 - 20, word, {
-    fontFamily: 'monospace', fontSize: 18, color: OBST_LABEL_COLOR
-  }).setOrigin(0.5).setDepth(0);
+    fontFamily: 'monospace', fontSize: 18, color: '#083056'
+  }).setOrigin(0.5);
 
   if (!this.state.target) this.chooseTarget();
 }
 
-// Gegnerinnen/Gegner: Krabbe (Boden) oder Papagei (Luft)
+// Spawner: Gegnerinnen/Gegner
 spawnEnemy() {
   const def = Phaser.Utils.Array.GetRandom(PIRATE_ENEMIES);
   const id = this.state.idCounter++;
   const x = WIDTH + 140;
 
-  // Vorab Größe
   const temp = this.add.image(0, 0, def.key).setScale(def.scale);
   const hPix = temp.displayHeight;
   temp.destroy();
@@ -231,13 +242,44 @@ spawnEnemy() {
   sprite.destroyed = false;
   sprite.type = 'enemy';
   sprite.id = id;
-  sprite.setDepth(0);
 
   const word = this.nextWord({ preferShort: true });
   sprite.word = word;
   sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, word, {
-    fontFamily: 'monospace', fontSize: 18, color: ENEMY_LABEL_COLOR
-  }).setOrigin(0.5).setDepth(0);
+    fontFamily: 'monospace', fontSize: 18, color: '#9b2c2c'
+  }).setOrigin(0.5);
+
+  if (!this.state.target) this.chooseTarget();
+}
+
+// Spawner: Bonus-Items (gefährden nicht, geben Punkte)
+spawnItem() {
+  const def = Phaser.Utils.Array.GetRandom(BONUS_ITEMS);
+  const id = this.state.idCounter++;
+  const x = WIDTH + 160;
+
+  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
+  const hPix = temp.displayHeight;
+  temp.destroy();
+
+  const groundY = HEIGHT - GROUND_H;
+  const altitude = Phaser.Math.Between(0, 1)
+    ? (groundY - hPix / 2)             // Boden
+    : (groundY - GROUND_H - Phaser.Math.Between(90, 150)); // Luft
+
+  const sprite = this.groups.items.create(x, altitude, def.key);
+  sprite.setScale(def.scale);
+  sprite.setImmovable(true);
+  sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor);
+  sprite.type = 'item';
+  sprite.id = id;
+  sprite.word = def.word;
+  sprite.points = def.points;
+  sprite.readyToCollect = false;
+
+  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, def.word, {
+    fontFamily: 'monospace', fontSize: 18, color: '#0b315a'
+  }).setOrigin(0.5);
 
   if (!this.state.target) this.chooseTarget();
 }
@@ -250,7 +292,7 @@ nextWord(opts = {}) {
     Phaser.Utils.Array.Shuffle(this.state.words);
   }
   if (opts.preferShort) {
-    const idx = this.state.words.findIndex(w => w.length <= Tuning.enemyPreferShortMaxLen);
+    const idx = this.state.words.findIndex(w => w.length <= 6);
     if (idx > -1) return this.state.words.splice(idx, 1)[0];
   }
   return this.state.words.shift();
@@ -265,6 +307,10 @@ chooseTarget() {
   this.groups.enemies.getChildren().forEach(e => {
     if (e.active && !e.destroyed && e.x > this.player.x - 10) candidates.push(e);
   });
+  this.groups.items.getChildren().forEach(i => {
+    if (i.active && !i.readyToCollect && i.x > this.player.x - 10) candidates.push(i);
+  });
+
   if (candidates.length === 0) {
     this.state.target = null;
     this.state.typedIndex = 0;
@@ -314,36 +360,64 @@ updateTargetLabelProgress() {
 
 onWordCompleted(target) {
   if (target.type === 'obstacle') {
+    // Hindernis „clearen“ und Sprung zuverlässig einplanen
     target.cleared = true;
-    target.setAlpha(0.85);
     target.body.checkCollision.none = true;
-    this.state.readyToJumpForId = target.id;
+    // exakte Trigger‑X: linke Kante des Hindernisses minus PreJump
+    const triggerX = (target.x - target.displayWidth / 2) - Tuning.preJumpDistancePx;
+    this.state.jumpTriggerX[target.id] = triggerX;
+
+    // Sofort springen, wenn wir schon sehr nahe dran sind und am Boden sind
+    const playerFront = this.player.body.x + this.player.body.width;
+    if (playerFront >= triggerX - 6 && this.player.body.onFloor()) {
+      this.player.setVelocityY(-Tuning.jumpStrength);
+      delete this.state.jumpTriggerX[target.id];
+    }
+
+    // Punkte für korrekt getipptes Hindernis
+    this.state.score += 10;
   } else if (target.type === 'enemy') {
     this.destroyEnemy(target);
+    this.state.score += 20;
+  } else if (target.type === 'item') {
+    // Item freischalten und sofort einsammeln, falls wir überlappen
+    target.readyToCollect = true;
+    this.collectItem(target);
   }
+
   this.state.clears++;
   if (this.state.clears % Tuning.speedStepEvery === 0) {
     this.state.worldSpeed += Tuning.speedStep;
     this.adjustWorldSpeed();
     this.toast(`Schneller! Speed ${Math.round(this.state.worldSpeed)}px/s`);
   }
+
   this.state.target = null;
   this.wordText.setText('');
   this.chooseTarget();
 }
 
+collectItem(item) {
+  if (!item.active) return;
+  this.state.score += (item.points || 25);
+  item.label && item.label.destroy();
+  item.destroy();
+  this.toast('+ ' + (item.points || 25));
+}
+
 destroyEnemy(enemy) {
   enemy.destroyed = true;
   enemy.body.checkCollision.none = true;
-  enemy.setTint(0xffffff);
   this.tweens.add({
     targets: [enemy],
     scale: 0.2,
     alpha: 0,
     duration: 180,
-    onComplete: () => enemy.destroy()
+    onComplete: () => {
+      enemy.label && enemy.label.destroy();
+      enemy.destroy();
+    }
   });
-  if (enemy.label) enemy.label.destroy();
 }
 
 adjustWorldSpeed() {
@@ -353,58 +427,68 @@ adjustWorldSpeed() {
   this.groups.enemies.getChildren().forEach(e => {
     if (e.active) e.body.setVelocityX(-this.state.worldSpeed * Tuning.enemySpeedFactor);
   });
+  this.groups.items.getChildren().forEach(i => {
+    if (i.active) i.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor);
+  });
 }
 
 flashWord() { this.cameras.main.flash(80, 247, 118, 142, false); }
 
 update(time, delta) {
-  const dx = (this.state.worldSpeed * delta) / 1000;
+  // Lauf‑Wippen nur am Boden
+  if (this.player.body.onFloor()) {
+    this.runTween && (this.runTween.paused = false);
+  } else {
+    this.runTween && (this.runTween.paused = true);
+  }
 
-  // Parallax
-  this.layers.sky.tilePositionX += dx * Tuning.parallax.sky;
-  this.layers.far.tilePositionX += dx * Tuning.parallax.far;
-  this.layers.mid.tilePositionX += dx * Tuning.parallax.mid;
-  this.layers.ground.tilePositionX += dx * Tuning.parallax.ground;
-
-  // Labels + Offscreen-Reinigung
+  // Labels folgen + Offscreen aufräumen
   this.groups.obstacles.getChildren().forEach(o => {
     if (!o.active) return;
     if (o.label) { o.label.x = o.x; o.label.y = o.y - o.displayHeight / 2 - 20; }
-    if (o.x < -100) { o.label && o.label.destroy(); o.destroy(); }
+    if (o.x < -100) { o.label && o.label.destroy(); o.destroy(); delete this.state.jumpTriggerX[o.id]; }
   });
   this.groups.enemies.getChildren().forEach(e => {
     if (!e.active) return;
     if (e.label) { e.label.x = e.x; e.label.y = e.y - e.displayHeight / 2 - 18; }
     if (e.x < -100) { e.label && e.label.destroy(); e.destroy(); }
   });
+  this.groups.items.getChildren().forEach(i => {
+    if (!i.active) return;
+    if (i.label) { i.label.x = i.x; i.label.y = i.y - i.displayHeight / 2 - 18; }
+    if (i.x < -100) { i.label && i.label.destroy(); i.destroy(); }
+  });
 
-  // Auto-Sprung
-  if (this.state.readyToJumpForId) {
-    const target = this.groups.obstacles.getChildren().find(o => o.id === this.state.readyToJumpForId);
-    if (target && target.active) {
-      const playerFront = this.player.x + (PLAYER_FRAME_W * PLAYER_SCALE) / 2;
-      if (playerFront >= target.x - Tuning.preJumpDistancePx && this.player.body.onFloor()) {
-        this.player.setVelocityY(-Tuning.jumpStrength);
-        if (this.player.anims.currentAnim?.key !== 'jump') this.player.anims.play('jump', true);
-        this.state.readyToJumpForId = null;
-      }
-    } else {
-      this.state.readyToJumpForId = null;
+  // Zuverlässiger Auto‑Sprung:
+  // Springe, sobald die Front des Players die Trigger‑X des cleared Hindernisses erreicht und am Boden ist.
+  const playerFront = this.player.body.x + this.player.body.width;
+  Object.keys(this.state.jumpTriggerX).forEach(idStr => {
+    const id = +idStr;
+    const triggerX = this.state.jumpTriggerX[id];
+    // Suche das Hindernis, zu dem der Trigger gehört (nur aktiv)
+    const obst = this.groups.obstacles.getChildren().find(o => o.id === id && o.active);
+    if (!obst) { delete this.state.jumpTriggerX[id]; return; }
+
+    // Sicherheitsfenster: springe in einem kleinen Bereich vor der Hinderniskante
+    const safeWindow = 10;
+    if (playerFront >= triggerX - safeWindow && this.player.body.onFloor()) {
+      this.player.setVelocityY(-Tuning.jumpStrength);
+      delete this.state.jumpTriggerX[id];
     }
-  }
 
-  // Animationen: Boden vs. Luft
-  const onFloor = this.player.body.onFloor();
-  if (!onFloor) {
-    if (this.player.anims.currentAnim?.key !== 'jump') this.player.anims.play('jump', true);
-  } else {
-    if (this.player.anims.currentAnim?.key !== 'run') this.player.anims.play('run', true);
-  }
+    // Falls wir (durch Timing) bereits an/über der Hinderniskante sind und noch nicht gesprungen:
+    const leftEdge = obst.x - obst.displayWidth / 2;
+    if (playerFront > leftEdge + 6 && this.player.body.onFloor() && this.state.jumpTriggerX[id]) {
+      this.player.setVelocityY(-Tuning.jumpStrength);
+      delete this.state.jumpTriggerX[id];
+    }
+  });
 
   // Ziel ggf. neu wählen
   if (!this.state.target || !this.state.target.active ||
       (this.state.target.type === 'obstacle' && this.state.target.cleared) ||
       (this.state.target.type === 'enemy' && this.state.target.destroyed) ||
+      (this.state.target.type === 'item' && this.state.target.readyToCollect) ||
       (this.state.target.x < this.player.x - 20)) {
     this.chooseTarget();
   }
@@ -418,7 +502,7 @@ updateHUD() {
   const acc = (this.state.correctChars + this.state.errors) > 0
     ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
     : 100;
-  this.hudText.setText(`WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}`);
+  this.hudText.setText(`Score: ${this.state.score}   WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}`);
 
   if (this.state.target) {
     const typed = this.state.target.word.slice(0, this.state.typedIndex);
@@ -437,6 +521,7 @@ toast(msg) {
 gameOver(reason) {
   this.spawnTimerObstacles && this.spawnTimerObstacles.remove();
   this.spawnTimerEnemies && this.spawnTimerEnemies.remove();
+  this.spawnTimerItems && this.spawnTimerItems.remove();
 
   const minutes = Math.max(0.0001, (performance.now() - this.state.startTime) / 60000);
   const wpm = Math.round((this.state.correctChars / 5) / minutes);
@@ -444,16 +529,18 @@ gameOver(reason) {
     ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
     : 100;
 
-  const entry = { ts: Date.now(), wpm, acc, clears: this.state.clears };
+  // lokal speichern
+  const entry = { ts: Date.now(), wpm, acc, clears: this.state.clears, score: this.state.score };
   const hist = JSON.parse(localStorage.getItem('jnt_history') || '[]');
   hist.push(entry);
   localStorage.setItem('jnt_history', JSON.stringify(hist));
 
   this.scene.pause();
-  const center = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH*0.72, 200, 0x000000, 0.6).setDepth(30);
-  const text = this.add.text(WIDTH/2, HEIGHT/2, `Game Over\n${reason}\nWPM: ${wpm} | Genauigkeit: ${acc}% | Clears: ${this.state.clears}\nDrücke R für Neustart`, {
-    fontFamily: 'system-ui', fontSize: 22, color: '#ffffff', align: 'center'
-  }).setOrigin(0.5).setDepth(31);
+  const center = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH*0.76, 220, 0x000000, 0.35).setDepth(30);
+  const text = this.add.text(WIDTH/2, HEIGHT/2,
+    `Game Over\n${reason}\nScore: ${this.state.score} | WPM: ${wpm} | Genauigkeit: ${acc}% | Clears: ${this.state.clears}\nDrücke R für Neustart`,
+    { fontFamily: 'system-ui', fontSize: 20, color: '#083056', align: 'center' }
+  ).setOrigin(0.5).setDepth(31);
 
   this.input.keyboard.once('keydown-R', () => {
     center.destroy(); text.destroy();
@@ -468,7 +555,7 @@ type: Phaser.AUTO,
 width: WIDTH,
 height: HEIGHT,
 parent: 'game',
-backgroundColor: '#87b3e8',
+backgroundColor: '#7ec4ff',
 render: { pixelArt: true, antialias: false },
 physics: { default: 'arcade', arcade: { gravity: { y: Tuning.gravityY }, debug: false } },
 scene: [GameScene]
