@@ -518,3 +518,6 @@ render: { pixelArt: true, antialias: false },
 physics: { default: 'arcade', arcade: { gravity: { y: Tuning.gravityY }, debug: false } },
 scene: [GameScene]
 };
+
+new Phaser.Game(config);
+})();
