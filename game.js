@@ -2,7 +2,6 @@
 const WIDTH = 960;
 const HEIGHT = 540;
 
-// Tuning
 const Tuning = {
 initialSpeed: 180,
 speedStep: 10,
@@ -22,35 +21,25 @@ preJumpDistancePx: 42
 
 };
 
-const AudioCfg = {
-bgmVol: 0.25,
-sfxVol: 0.6
-};
-
+const AudioCfg = { bgmVol: 0.25, sfxVol: 0.6 };
 const GROUND_H = 56;
 
-// Spielfigur kleiner
 const PLAYER_SCALE = 0.95;
 
-// Hindernisse: Fässer etwas kleiner
 const PIRATE_OBSTACLES = [
-{ key: 'pirate_barrel', path: 'assets/obstacles/barrel.png', scale: 0.62 }, // kleiner
+{ key: 'pirate_barrel', path: 'assets/obstacles/barrel.png', scale: 0.62 },
 { key: 'pirate_thorn_big', path: 'assets/obstacles/big_thorns.png', scale: 0.78 },
 { key: 'pirate_thorn_small', path: 'assets/obstacles/small_thorn.png', scale: 0.86 }
 ];
-
-// Gegnerinnen/Gegner
 const PIRATE_ENEMIES = [
 { key: 'pirate_crab', path: 'assets/environment/crab.png', scale: 0.95, type: 'ground' },
 { key: 'pirate_parrot_enemy', path: 'assets/characters/parrot.png', scale: 0.85, type: 'air' }
 ];
-
-// Bonus-Items (Uhr/Kompass kleiner)
 const BONUS_ITEMS = [
-{ key: 'item_coin', path: 'assets/items/coin.png', scale: 0.8,  word: 'muenze', points: 50 },
-{ key: 'item_heart', path: 'assets/items/heart.png', scale: 0.8, word: 'herz',   points: 50 },
+{ key: 'item_coin', path: 'assets/items/coin.png', scale: 0.8, word: 'muenze', points: 50 },
+{ key: 'item_heart', path: 'assets/items/heart.png', scale: 0.8, word: 'herz', points: 50 },
 { key: 'item_chest', path: 'assets/items/chest.png', scale: 0.85, word: 'schatz', points: 75 },
-{ key: 'item_compass', path: 'assets/items/compass.png', scale: 0.7, word: 'uhr', points: 50 } // Uhr kleiner
+{ key: 'item_compass', path: 'assets/items/compass.png', scale: 0.7, word: 'uhr', points: 50 }
 ];
 
 class GameScene extends Phaser.Scene {
@@ -73,31 +62,40 @@ eventLog: []
 };
 this.groups = {};
 this.sounds = {};
+this.ui = {};
 }
 
 preload() {
-  // Wörter
+  // Debug: Ladefehler anzeigen
+  this.load.on('loaderror', (file) => {
+    console.warn('Asset-Fehler:', file.key, file.src);
+    this.showStatus(`Asset-Fehler: ${file.src}`);
+  });
+
+  // Wortliste
   this.load.text('woerter', 'woerter.txt');
 
   // Spieler
   this.load.image('player_parrot', 'assets/characters/parrot.png');
 
-  // Hindernisse, Gegner, Items
+  // Hindernisse/Gegner/Items
   PIRATE_OBSTACLES.forEach(o => this.load.image(o.key, o.path));
   PIRATE_ENEMIES.forEach(e => this.load.image(e.key, e.path));
   BONUS_ITEMS.forEach(i => this.load.image(i.key, i.path));
 
-  // Sounds
+  // Sounds (alle MP3)
   this.load.audio('sfx_kling', 'assets/sounds/kling.mp3');
   this.load.audio('sfx_jump',  'assets/sounds/jump.mp3');
   this.load.audio('bgm',       'assets/sounds/bgm.mp3');
 
-  // Physischer Boden + sichtbarer Bodenstreifen
+  // Platzhalter-Texturen (Fallback, falls Bilder fehlen)
   const g = this.make.graphics({ x: 0, y: 0, add: false });
-  g.fillStyle(0x000000); g.fillRect(0, 0, WIDTH, GROUND_H);
-  g.generateTexture('groundPhys', WIDTH, GROUND_H); g.clear();
-  g.fillStyle(0x3fa34c); g.fillRect(0, 0, WIDTH, GROUND_H);
-  g.generateTexture('groundVis', WIDTH, GROUND_H);
+  g.fillStyle(0x3fa34c).fillRect(0, 0, WIDTH, GROUND_H).generateTexture('groundVis', WIDTH, GROUND_H).clear();
+  g.fillStyle(0x000000).fillRect(0, 0, WIDTH, GROUND_H).generateTexture('groundPhys', WIDTH, GROUND_H).clear();
+  g.fillStyle(0x555).fillRoundedRect(0, 0, 40, 40, 6).generateTexture('ph_obst', 40, 40).clear();
+  g.fillStyle(0x933).fillRoundedRect(0, 0, 36, 36, 6).generateTexture('ph_enemy', 36, 36).clear();
+  g.fillStyle(0x2862ff).fillRoundedRect(0, 0, 34, 34, 6).generateTexture('ph_item', 34, 34).clear();
+  g.fillStyle(0xffb300).fillRoundedRect(0, 0, 38, 38, 6).generateTexture('ph_player', 38, 38);
   g.destroy();
 }
 
@@ -108,6 +106,9 @@ create() {
   // Wörter
   const raw = this.cache.text.get('woerter') || '';
   this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
+  if (this.state.words.length === 0) {
+    this.state.words = ['muenze','herz','schatz','uhr','und','ist','lauf','sprung'];
+  }
   Phaser.Utils.Array.Shuffle(this.state.words);
 
   // Boden
@@ -115,9 +116,10 @@ create() {
   const physGround = this.physics.add.staticImage(WIDTH/2, HEIGHT - GROUND_H/2, 'groundPhys').setAlpha(0);
   this.ground = physGround;
 
-  // Spieler (Piratenvogel), kleinere Kollisionsbox bezogen auf Anzeigegröße
+  // Spieler
+  const playerKey = this.ensureTexture('player_parrot', 'ph_player');
   const playerY = HEIGHT - GROUND_H - 40;
-  this.player = this.physics.add.image(140, playerY, 'player_parrot');
+  this.player = this.physics.add.image(140, playerY, playerKey);
   this.player.setScale(PLAYER_SCALE);
   this.player.setCollideWorldBounds(true);
   this.player.body.setSize(this.player.displayWidth * 0.6, this.player.displayHeight * 0.7);
@@ -125,11 +127,14 @@ create() {
   this.player.body.setMaxVelocityY(1200);
   this.physics.add.collider(this.player, physGround);
 
-  // Sounds vorbereiten
+  // Sounds
   this.sounds.kling = this.sound.add('sfx_kling', { volume: AudioCfg.sfxVol });
   this.sounds.jump  = this.sound.add('sfx_jump',  { volume: AudioCfg.sfxVol });
   this.sounds.bgm   = this.sound.add('bgm',       { volume: AudioCfg.bgmVol, loop: true });
-  this.sounds.bgm.play();
+
+  // Musik erst nach Nutzeraktion (Autoplay-Schutz)
+  const startAudio = () => { if (!this.sounds.bgm.isPlaying) this.sounds.bgm.play(); };
+  if (this.sound.locked) this.sound.once('unlocked', startAudio); else startAudio();
 
   // Gruppen
   this.groups.obstacles = this.physics.add.group({ allowGravity: false });
@@ -148,17 +153,14 @@ create() {
   });
 
   // HUD
-  this.hudText = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#083056' }).setDepth(10);
-  this.wordText = this.add.text(WIDTH/2, 10, '', { fontFamily: 'monospace', fontSize: 20, color: '#0b315a' })
-    .setOrigin(0.5, 0).setDepth(10);
-  this.pointsLogText = this.add.text(WIDTH - 12, 10, '', { fontFamily: 'monospace', fontSize: 14, color: '#083056', align: 'right' })
-    .setOrigin(1, 0).setDepth(10);
-  this.msgText = this.add.text(WIDTH/2, HEIGHT/2, '', { fontFamily: 'system-ui', fontSize: 28, color: '#083056' })
-    .setOrigin(0.5).setDepth(20).setAlpha(0);
+  this.ui.hud = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#083056' }).setDepth(10);
+  this.ui.word = this.add.text(WIDTH/2, 10, '', { fontFamily: 'monospace', fontSize: 20, color: '#0b315a' }).setOrigin(0.5, 0).setDepth(10);
+  this.ui.log  = this.add.text(WIDTH - 12, 10, '', { fontFamily: 'monospace', fontSize: 14, color: '#083056', align: 'right' }).setOrigin(1, 0).setDepth(10);
+  this.ui.msg  = this.add.text(WIDTH/2, HEIGHT/2, '', { fontFamily: 'system-ui', fontSize: 28, color: '#083056' }).setOrigin(0.5).setDepth(20).setAlpha(0);
+  this.ui.status = this.add.text(12, HEIGHT - 22, 'Bereit', { fontFamily: 'monospace', fontSize: 12, color: '#083056' }).setDepth(10);
 
-  // Eingabe
+  // Eingaben
   this.input.keyboard.on('keydown', (e) => this.handleKey(e));
-  // Mute-Toggle
   this.input.keyboard.on('keydown-M', () => { this.sound.mute = !this.sound.mute; this.toast(this.sound.mute ? 'Sound aus' : 'Sound an'); });
 
   // Spawner
@@ -168,9 +170,20 @@ create() {
   });
   this.spawnTimerItems = this.time.addEvent({ delay: Tuning.itemDelayMs, loop: true, callback: () => this.spawnItem() });
 
+  // Sofort etwas spawnen, damit du direkt etwas siehst
+  this.spawnObstacle();
+  this.spawnItem();
+
   this.state.startTime = performance.now();
-  this.updateHUD();
-  this.updatePointsLog();
+  this.updateHUD(); this.updatePointsLog();
+}
+
+// Hilfen
+ensureTexture(key, fallback) {
+  return this.textures.exists(key) ? key : fallback;
+}
+showStatus(txt) {
+  if (this.ui?.status) this.ui.status.setText(txt);
 }
 
 // Spawns
@@ -179,11 +192,12 @@ spawnObstacle() {
   const id = this.state.idCounter++;
   const x = WIDTH + 120;
 
-  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
+  const key = this.ensureTexture(def.key, 'ph_obst');
+  const temp = this.add.image(0, 0, key).setScale(def.scale);
   const hPix = temp.displayHeight; temp.destroy();
-  const y = HEIGHT - GROUND_H - hPix / 2;
 
-  const sprite = this.groups.obstacles.create(x, y, def.key);
+  const y = HEIGHT - GROUND_H - hPix / 2;
+  const sprite = this.groups.obstacles.create(x, y, key);
   sprite.setScale(def.scale).setImmovable(true);
   sprite.body.setVelocityX(-this.state.worldSpeed);
   sprite.body.setSize(sprite.displayWidth * 0.8, sprite.displayHeight * 0.85);
@@ -192,9 +206,7 @@ spawnObstacle() {
 
   const word = this.nextWord();
   sprite.word = word;
-  sprite.label = this.add.text(x, y - sprite.displayHeight / 2 - 20, word, {
-    fontFamily: 'monospace', fontSize: 18, color: '#083056'
-  }).setOrigin(0.5);
+  sprite.label = this.add.text(x, y - sprite.displayHeight / 2 - 20, word, { fontFamily: 'monospace', fontSize: 18, color: '#083056' }).setOrigin(0.5);
   if (!this.state.target) this.chooseTarget();
 }
 
@@ -202,22 +214,21 @@ spawnEnemy() {
   const def = Phaser.Utils.Array.GetRandom(PIRATE_ENEMIES);
   const id = this.state.idCounter++; const x = WIDTH + 140;
 
-  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
+  const key = this.ensureTexture(def.key, 'ph_enemy');
+  const temp = this.add.image(0, 0, key).setScale(def.scale);
   const hPix = temp.displayHeight; temp.destroy();
 
   const groundY = HEIGHT - GROUND_H;
   const altitude = def.type === 'ground' ? (groundY - hPix / 2) : (groundY - GROUND_H - Phaser.Math.Between(100, 160));
 
-  const sprite = this.groups.enemies.create(x, altitude, def.key);
+  const sprite = this.groups.enemies.create(x, altitude, key);
   sprite.setScale(def.scale).setImmovable(true);
   sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.enemySpeedFactor);
   sprite.destroyed = false; sprite.type = 'enemy'; sprite.id = id;
 
   const word = this.nextWord({ preferShort: true });
   sprite.word = word;
-  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, word, {
-    fontFamily: 'monospace', fontSize: 18, color: '#9b2c2c'
-  }).setOrigin(0.5);
+  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, word, { fontFamily: 'monospace', fontSize: 18, color: '#9b2c2c' }).setOrigin(0.5);
   if (!this.state.target) this.chooseTarget();
 }
 
@@ -225,25 +236,24 @@ spawnItem() {
   const def = Phaser.Utils.Array.GetRandom(BONUS_ITEMS);
   const id = this.state.idCounter++; const x = WIDTH + 160;
 
-  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
+  const key = this.ensureTexture(def.key, 'ph_item');
+  const temp = this.add.image(0, 0, key).setScale(def.scale);
   const hPix = temp.displayHeight; temp.destroy();
 
   const groundY = HEIGHT - GROUND_H;
   const altitude = Phaser.Math.Between(0, 1) ? (groundY - hPix / 2) : (groundY - GROUND_H - Phaser.Math.Between(90, 150));
 
-  const sprite = this.groups.items.create(x, altitude, def.key);
+  const sprite = this.groups.items.create(x, altitude, key);
   sprite.setScale(def.scale).setImmovable(true);
   sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor);
   sprite.type = 'item'; sprite.id = id; sprite.word = def.word; sprite.points = def.points;
   sprite.readyToCollect = false;
 
-  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, def.word, {
-    fontFamily: 'monospace', fontSize: 18, color: '#0b315a'
-  }).setOrigin(0.5);
+  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, def.word, { fontFamily: 'monospace', fontSize: 18, color: '#0b315a' }).setOrigin(0.5);
   if (!this.state.target) this.chooseTarget();
 }
 
-// Wortauswahl
+// Wörter
 nextWord(opts = {}) {
   if (this.state.words.length === 0) {
     const raw = this.cache.text.get('woerter') || '';
@@ -265,12 +275,12 @@ chooseTarget() {
   this.groups.items.getChildren().forEach(i => { if (i.active && !i.readyToCollect && i.x > this.player.x - 10) candidates.push(i); });
 
   if (candidates.length === 0) {
-    this.state.target = null; this.state.typedIndex = 0; this.wordText.setText(''); return;
+    this.state.target = null; this.state.typedIndex = 0; this.ui.word.setText(''); return;
   }
   candidates.sort((a, b) => a.x - b.x);
   const target = candidates[0];
   this.state.target = target; this.state.typedIndex = 0;
-  this.wordText.setText(target.word); this.updateTargetLabelProgress();
+  this.ui.word.setText(target.word); this.updateTargetLabelProgress();
 }
 
 // Eingabe
@@ -286,9 +296,7 @@ handleKey(e) {
   if (got === expected) {
     this.state.typedIndex++; this.state.correctChars++;
     this.updateTargetLabelProgress();
-    if (this.state.typedIndex === this.state.target.word.length) {
-      this.onWordCompleted(this.state.target);
-    }
+    if (this.state.typedIndex === this.state.target.word.length) this.onWordCompleted(this.state.target);
   } else {
     this.state.errors++; this.flashWord();
   }
@@ -314,19 +322,17 @@ addPoints(reason, pts) {
 }
 
 updatePointsLog() {
-  if (!this.pointsLogText) return;
   const lines = ['Punkte-Log:'];
   for (let i = this.state.eventLog.length - 1; i >= 0; i--) {
     const e = this.state.eventLog[i];
     lines.push(`+${e.pts} ${e.reason}`);
     if (lines.length > 8) break;
   }
-  this.pointsLogText.setText(lines.join('\n'));
+  this.ui.log.setText(lines.join('\n'));
 }
 
 onWordCompleted(target) {
   if (target.type === 'obstacle') {
-    // Hindernis: clearen und Sprung planen
     target.cleared = true;
     target.body.checkCollision.none = true;
     const triggerX = (target.x - target.displayWidth / 2) - Tuning.preJumpDistancePx;
@@ -336,12 +342,10 @@ onWordCompleted(target) {
     this.destroyEnemy(target);
     this.addPoints('Gegner', 20);
   } else if (target.type === 'item') {
-    // Item: freischalten und Sprung zum Item planen
     target.readyToCollect = true;
     const triggerX = (target.x - target.displayWidth / 2) - Tuning.preJumpDistancePx;
     this.state.jumpTriggerX[target.id] = triggerX;
-    // Sofort einsammeln, falls bereits Überlappung
-    this.collectItem(target);
+    this.collectItem(target); // sofort einsammeln, falls überlappt
   }
 
   this.state.clears++;
@@ -352,16 +356,15 @@ onWordCompleted(target) {
   }
 
   this.state.target = null;
-  this.wordText.setText('');
+  this.ui.word.setText('');
   this.chooseTarget();
 }
 
 collectItem(item) {
   if (!item.active) return;
-  // Punkte und Kling-Sound
+  this.sounds.kling && this.sounds.kling.play();
   const pts = item.points || 25;
   const name = item.word || 'Item';
-  this.sounds.kling && this.sounds.kling.play();
   item.label && item.label.destroy();
   item.destroy();
   this.addPoints(name, pts);
@@ -372,9 +375,7 @@ destroyEnemy(enemy) {
   enemy.body.checkCollision.none = true;
   this.tweens.add({
     targets: [enemy],
-    scale: 0.2,
-    alpha: 0,
-    duration: 180,
+    scale: 0.2, alpha: 0, duration: 180,
     onComplete: () => { enemy.label && enemy.label.destroy(); enemy.destroy(); }
   });
 }
@@ -407,14 +408,13 @@ update() {
     if (i.x < -100) { i.label && i.label.destroy(); i.destroy(); }
   });
 
-  // Zuverlässiger Auto‑Sprung (Hindernisse + freigeschaltete Items)
+  // Auto-Sprung (Hindernisse + freigeschaltete Items)
   const playerFront = this.player.body.x + this.player.body.width;
   Object.keys(this.state.jumpTriggerX).forEach(idStr => {
     const id = +idStr; const triggerX = this.state.jumpTriggerX[id];
     const obj = this.groups.obstacles.getChildren().find(o => o.id === id && o.active)
              || this.groups.items.getChildren().find(i => i.id === id && i.active);
     if (!obj) { delete this.state.jumpTriggerX[id]; return; }
-
     const safeWindow = 10;
     const leftEdge = obj.x - obj.displayWidth / 2;
 
@@ -423,7 +423,6 @@ update() {
       this.sounds.jump && this.sounds.jump.play();
       delete this.state.jumpTriggerX[id];
     }
-    // Fallback, falls Trigger knapp verpasst
     if (playerFront > leftEdge + 6 && this.player.body.onFloor() && this.state.jumpTriggerX[id]) {
       this.player.setVelocityY(-Tuning.jumpStrength);
       this.sounds.jump && this.sounds.jump.play();
@@ -446,23 +445,21 @@ update() {
 updateHUD() {
   const minutes = Math.max(0.0001, (performance.now() - this.state.startTime) / 60000);
   const wpm = Math.round((this.state.correctChars / 5) / minutes);
-  const acc = (this.state.correctChars + this.state.errors) > 0
-    ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
-    : 100;
-  this.hudText.setText(`Score: ${this.state.score}   WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}`);
+  const acc = (this.state.correctChars + this.state.errors) > 0 ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors)) : 100;
+  this.ui.hud.setText(`Score: ${this.state.score}   WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}`);
 
   if (this.state.target) {
     const typed = this.state.target.word.slice(0, this.state.typedIndex);
     const rest = this.state.target.word.slice(this.state.typedIndex);
-    this.wordText.setText(typed + rest);
+    this.ui.word.setText(typed + rest);
   }
 }
 
 toast(msg) {
-  this.msgText.setText(msg);
-  this.tweens.killTweensOf(this.msgText);
-  this.msgText.setAlpha(1);
-  this.tweens.add({ targets: this.msgText, alpha: 0, duration: 1200, ease: 'Sine.easeOut', delay: 300 });
+  this.ui.msg.setText(msg);
+  this.tweens.killTweensOf(this.ui.msg);
+  this.ui.msg.setAlpha(1);
+  this.tweens.add({ targets: this.ui.msg, alpha: 0, duration: 1200, ease: 'Sine.easeOut', delay: 300 });
 }
 
 gameOver(reason) {
@@ -475,9 +472,7 @@ gameOver(reason) {
 
   const minutes = Math.max(0.0001, (performance.now() - this.state.startTime) / 60000);
   const wpm = Math.round((this.state.correctChars / 5) / minutes);
-  const acc = (this.state.correctChars + this.state.errors) > 0
-    ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
-    : 100;
+  const acc = (this.state.correctChars + this.state.errors) > 0 ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors)) : 100;
 
   const entry = { ts: Date.now(), score: this.state.score, wpm, acc, clears: this.state.clears, log: this.state.eventLog };
   const hist = JSON.parse(localStorage.getItem('jnt_history') || '[]');
@@ -493,9 +488,7 @@ gameOver(reason) {
     ...this.state.eventLog.slice(-6).map(e => `+${e.pts} ${e.reason}`),
     `Drücke R oder Enter, oder klicke, um neu zu starten`
   ];
-  const text = this.add.text(WIDTH/2, HEIGHT/2, lines.join('\n'), {
-    fontFamily: 'system-ui', fontSize: 18, color: '#083056', align: 'center'
-  }).setOrigin(0.5).setDepth(31);
+  const text = this.add.text(WIDTH/2, HEIGHT/2, lines.join('\n'), { fontFamily: 'system-ui', fontSize: 18, color: '#083056', align: 'center' }).setOrigin(0.5).setDepth(31);
 
   const restart = () => { center.destroy(); text.destroy(); this.scene.restart(); };
   const rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
@@ -517,3 +510,6 @@ render: { pixelArt: true, antialias: false },
 physics: { default: 'arcade', arcade: { gravity: { y: Tuning.gravityY }, debug: false } },
 scene: [GameScene]
 };
+
+new Phaser.Game(config);
+})();
