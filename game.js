@@ -22,25 +22,35 @@ preJumpDistancePx: 42
 
 };
 
-const GROUND_H = 56;
-const PLAYER_SCALE = 1.2;
+const AudioCfg = {
+bgmVol: 0.25,
+sfxVol: 0.6
+};
 
+const GROUND_H = 56;
+
+// Spielfigur kleiner
+const PLAYER_SCALE = 0.95;
+
+// Hindernisse: Fässer etwas kleiner
 const PIRATE_OBSTACLES = [
-{ key: 'pirate_barrel', path: 'assets/obstacles/barrel.png', scale: 0.68 }, // kleiner
+{ key: 'pirate_barrel', path: 'assets/obstacles/barrel.png', scale: 0.62 }, // kleiner
 { key: 'pirate_thorn_big', path: 'assets/obstacles/big_thorns.png', scale: 0.78 },
 { key: 'pirate_thorn_small', path: 'assets/obstacles/small_thorn.png', scale: 0.86 }
 ];
 
+// Gegnerinnen/Gegner
 const PIRATE_ENEMIES = [
 { key: 'pirate_crab', path: 'assets/environment/crab.png', scale: 0.95, type: 'ground' },
-{ key: 'pirate_parrot_enemy', path: 'assets/characters/parrot.png', scale: 0.9, type: 'air' }
+{ key: 'pirate_parrot_enemy', path: 'assets/characters/parrot.png', scale: 0.85, type: 'air' }
 ];
 
+// Bonus-Items (Uhr/Kompass kleiner)
 const BONUS_ITEMS = [
-{ key: 'item_coin', path: 'assets/items/coin.png', scale: 0.9, word: 'muenze', points: 50 },
-{ key: 'item_heart', path: 'assets/items/heart.png', scale: 0.9, word: 'herz', points: 50 },
-{ key: 'item_chest', path: 'assets/items/chest.png', scale: 0.9, word: 'schatz', points: 75 },
-{ key: 'item_compass', path: 'assets/items/compass.png', scale: 0.9, word: 'uhr', points: 50 }
+{ key: 'item_coin', path: 'assets/items/coin.png', scale: 0.8,  word: 'muenze', points: 50 },
+{ key: 'item_heart', path: 'assets/items/heart.png', scale: 0.8, word: 'herz',   points: 50 },
+{ key: 'item_chest', path: 'assets/items/chest.png', scale: 0.85, word: 'schatz', points: 75 },
+{ key: 'item_compass', path: 'assets/items/compass.png', scale: 0.7, word: 'uhr', points: 50 } // Uhr kleiner
 ];
 
 class GameScene extends Phaser.Scene {
@@ -56,12 +66,13 @@ startTime: 0,
 clears: 0,
 target: null,
 typedIndex: 0,
-jumpTriggerX: {}, // id -> X vor Hindernis
+jumpTriggerX: {}, // id -> X vor Objekt (Hindernis/Item)
 idCounter: 1,
 gameOver: false,
-eventLog: [] // Punkteliste (letzte Aktionen)
+eventLog: []
 };
 this.groups = {};
+this.sounds = {};
 }
 
 preload() {
@@ -71,10 +82,15 @@ preload() {
   // Spieler
   this.load.image('player_parrot', 'assets/characters/parrot.png');
 
-  // Hindernisse, Gegnerinnen/Gegner, Items
+  // Hindernisse, Gegner, Items
   PIRATE_OBSTACLES.forEach(o => this.load.image(o.key, o.path));
   PIRATE_ENEMIES.forEach(e => this.load.image(e.key, e.path));
   BONUS_ITEMS.forEach(i => this.load.image(i.key, i.path));
+
+  // Sounds
+  this.load.audio('sfx_kling', 'assets/sounds/kling.mp3');
+  this.load.audio('sfx_jump',  'assets/sounds/jump.wav');
+  this.load.audio('bgm',       'assets/sounds/bgm.mp3');
 
   // Physischer Boden + sichtbarer Bodenstreifen
   const g = this.make.graphics({ x: 0, y: 0, add: false });
@@ -99,20 +115,26 @@ create() {
   const physGround = this.physics.add.staticImage(WIDTH/2, HEIGHT - GROUND_H/2, 'groundPhys').setAlpha(0);
   this.ground = physGround;
 
-  // Spieler (Piratenvogel)
+  // Spieler (Piratenvogel), kleinere Kollisionsbox bezogen auf Anzeigegröße
   const playerY = HEIGHT - GROUND_H - 40;
   this.player = this.physics.add.image(140, playerY, 'player_parrot');
   this.player.setScale(PLAYER_SCALE);
   this.player.setCollideWorldBounds(true);
-  this.player.body.setSize(this.player.width * 0.6, this.player.height * 0.7);
-  this.player.body.setOffset(this.player.width * 0.2, this.player.height * 0.15);
+  this.player.body.setSize(this.player.displayWidth * 0.6, this.player.displayHeight * 0.7);
+  this.player.body.setOffset(this.player.displayWidth * 0.2, this.player.displayHeight * 0.15);
   this.player.body.setMaxVelocityY(1200);
   this.physics.add.collider(this.player, physGround);
 
+  // Sounds vorbereiten
+  this.sounds.kling = this.sound.add('sfx_kling', { volume: AudioCfg.sfxVol });
+  this.sounds.jump  = this.sound.add('sfx_jump',  { volume: AudioCfg.sfxVol });
+  this.sounds.bgm   = this.sound.add('bgm',       { volume: AudioCfg.bgmVol, loop: true });
+  this.sounds.bgm.play();
+
   // Gruppen
   this.groups.obstacles = this.physics.add.group({ allowGravity: false });
-  this.groups.enemies = this.physics.add.group({ allowGravity: false });
-  this.groups.items = this.physics.add.group({ allowGravity: false });
+  this.groups.enemies   = this.physics.add.group({ allowGravity: false });
+  this.groups.items     = this.physics.add.group({ allowGravity: false });
 
   // Kollisionen
   this.physics.add.collider(this.player, this.groups.obstacles, (player, obst) => {
@@ -126,8 +148,7 @@ create() {
   });
 
   // HUD
-  this.hudText = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#083056' })
-    .setScrollFactor(0).setDepth(10);
+  this.hudText = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#083056' }).setDepth(10);
   this.wordText = this.add.text(WIDTH/2, 10, '', { fontFamily: 'monospace', fontSize: 20, color: '#0b315a' })
     .setOrigin(0.5, 0).setDepth(10);
   this.pointsLogText = this.add.text(WIDTH - 12, 10, '', { fontFamily: 'monospace', fontSize: 14, color: '#083056', align: 'right' })
@@ -137,6 +158,8 @@ create() {
 
   // Eingabe
   this.input.keyboard.on('keydown', (e) => this.handleKey(e));
+  // Mute-Toggle
+  this.input.keyboard.on('keydown-M', () => { this.sound.mute = !this.sound.mute; this.toast(this.sound.mute ? 'Sound aus' : 'Sound an'); });
 
   // Spawner
   this.spawnTimerObstacles = this.time.addEvent({ delay: Tuning.obstacleDelayMs, loop: true, callback: () => this.spawnObstacle() });
@@ -155,6 +178,7 @@ spawnObstacle() {
   const def = Phaser.Utils.Array.GetRandom(PIRATE_OBSTACLES);
   const id = this.state.idCounter++;
   const x = WIDTH + 120;
+
   const temp = this.add.image(0, 0, def.key).setScale(def.scale);
   const hPix = temp.displayHeight; temp.destroy();
   const y = HEIGHT - GROUND_H - hPix / 2;
@@ -177,6 +201,7 @@ spawnObstacle() {
 spawnEnemy() {
   const def = Phaser.Utils.Array.GetRandom(PIRATE_ENEMIES);
   const id = this.state.idCounter++; const x = WIDTH + 140;
+
   const temp = this.add.image(0, 0, def.key).setScale(def.scale);
   const hPix = temp.displayHeight; temp.destroy();
 
@@ -187,234 +212,3 @@ spawnEnemy() {
   sprite.setScale(def.scale).setImmovable(true);
   sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.enemySpeedFactor);
   sprite.destroyed = false; sprite.type = 'enemy'; sprite.id = id;
-
-  const word = this.nextWord({ preferShort: true });
-  sprite.word = word;
-  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, word, {
-    fontFamily: 'monospace', fontSize: 18, color: '#9b2c2c'
-  }).setOrigin(0.5);
-  if (!this.state.target) this.chooseTarget();
-}
-
-spawnItem() {
-  const def = Phaser.Utils.Array.GetRandom(BONUS_ITEMS);
-  const id = this.state.idCounter++; const x = WIDTH + 160;
-  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
-  const hPix = temp.displayHeight; temp.destroy();
-
-  const groundY = HEIGHT - GROUND_H;
-  const altitude = Phaser.Math.Between(0, 1) ? (groundY - hPix / 2) : (groundY - GROUND_H - Phaser.Math.Between(90, 150));
-
-  const sprite = this.groups.items.create(x, altitude, def.key);
-  sprite.setScale(def.scale).setImmovable(true);
-  sprite.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor);
-  sprite.type = 'item'; sprite.id = id; sprite.word = def.word; sprite.points = def.points;
-  sprite.readyToCollect = false;
-
-  sprite.label = this.add.text(x, altitude - sprite.displayHeight / 2 - 18, def.word, {
-    fontFamily: 'monospace', fontSize: 18, color: '#0b315a'
-  }).setOrigin(0.5);
-  if (!this.state.target) this.chooseTarget();
-}
-
-// Wortauswahl
-nextWord(opts = {}) {
-  if (this.state.words.length === 0) {
-    const raw = this.cache.text.get('woerter') || '';
-    this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
-    Phaser.Utils.Array.Shuffle(this.state.words);
-  }
-  if (opts.preferShort) {
-    const idx = this.state.words.findIndex(w => w.length <= 6);
-    if (idx > -1) return this.state.words.splice(idx, 1)[0];
-  }
-  return this.state.words.shift();
-}
-
-// Ziel wählen
-chooseTarget() {
-  const candidates = [];
-  this.groups.obstacles.getChildren().forEach(o => { if (o.active && !o.cleared && o.x > this.player.x - 10) candidates.push(o); });
-  this.groups.enemies.getChildren().forEach(e => { if (e.active && !e.destroyed && e.x > this.player.x - 10) candidates.push(e); });
-  this.groups.items.getChildren().forEach(i => { if (i.active && !i.readyToCollect && i.x > this.player.x - 10) candidates.push(i); });
-
-  if (candidates.length === 0) {
-    this.state.target = null; this.state.typedIndex = 0; this.wordText.setText(''); return;
-  }
-  candidates.sort((a, b) => a.x - b.x);
-  const target = candidates[0];
-  this.state.target = target; this.state.typedIndex = 0;
-  this.wordText.setText(target.word); this.updateTargetLabelProgress();
-}
-
-// Eingabe
-handleKey(e) {
-  if (this.state.gameOver) return; // keine Eingaben bei Game Over
-  if (!this.state.target) return;
-  const key = e.key;
-  if (!key || key.length !== 1) return;
-
-  const expected = this.normalize(this.state.target.word[this.state.typedIndex] || '');
-  const got = this.normalize(key);
-
-  if (got === expected) {
-    this.state.typedIndex++; this.state.correctChars++;
-    this.updateTargetLabelProgress();
-    if (this.state.typedIndex === this.state.target.word.length) {
-      this.onWordCompleted(this.state.target);
-    }
-  } else {
-    this.state.errors++; this.flashWord();
-  }
-  this.updateHUD();
-}
-
-normalize(ch) { return ch.toLowerCase(); }
-
-updateTargetLabelProgress() {
-  const t = this.state.target;
-  if (!t || !t.label) return;
-  const typed = t.word.slice(0, this.state.typedIndex);
-  const rest = t.word.slice(this.state.typedIndex);
-  t.label.setText(typed + rest);
-}
-
-// Punkte-Log
-addPoints(reason, pts) {
-  this.state.score += pts;
-  this.state.eventLog.push({ t: Date.now(), reason, pts });
-  if (this.state.eventLog.length > 10) this.state.eventLog.shift();
-  this.updatePointsLog();
-  this.toast(`+${pts} ${reason}`);
-}
-
-updatePointsLog() {
-  if (!this.pointsLogText) return;
-  const lines = ['Punkte-Log:'];
-  for (let i = this.state.eventLog.length - 1; i >= 0; i--) {
-    const e = this.state.eventLog[i];
-    lines.push(`+${e.pts} ${e.reason}`);
-    if (lines.length > 8) break;
-  }
-  this.pointsLogText.setText(lines.join('\n'));
-}
-
-onWordCompleted(target) {
-  if (target.type === 'obstacle') {
-    target.cleared = true;
-    target.body.checkCollision.none = true;
-    const triggerX = (target.x - target.displayWidth / 2) - Tuning.preJumpDistancePx;
-    this.state.jumpTriggerX[target.id] = triggerX;
-
-    const playerFront = this.player.body.x + this.player.body.width;
-    if (playerFront >= triggerX - 6 && this.player.body.onFloor()) {
-      this.player.setVelocityY(-Tuning.jumpStrength);
-      delete this.state.jumpTriggerX[target.id];
-    }
-    this.addPoints('Hindernis', 10);
-  } else if (target.type === 'enemy') {
-    this.destroyEnemy(target);
-    this.addPoints('Gegner', 20);
-  } else if (target.type === 'item') {
-    target.readyToCollect = true;
-    this.collectItem(target); // sammle sofort, falls überlappt
-  }
-
-  this.state.clears++;
-  if (this.state.clears % Tuning.speedStepEvery === 0) {
-    this.state.worldSpeed += Tuning.speedStep;
-    this.adjustWorldSpeed();
-    this.toast(`Schneller! Speed ${Math.round(this.state.worldSpeed)}px/s`);
-  }
-
-  this.state.target = null;
-  this.wordText.setText('');
-  this.chooseTarget();
-}
-
-collectItem(item) {
-  if (!item.active) return;
-  const pts = item.points || 25;
-  const name = item.word || 'Item';
-  item.label && item.label.destroy();
-  item.destroy();
-  this.addPoints(name, pts);
-}
-
-destroyEnemy(enemy) {
-  enemy.destroyed = true;
-  enemy.body.checkCollision.none = true;
-  this.tweens.add({
-    targets: [enemy],
-    scale: 0.2,
-    alpha: 0,
-    duration: 180,
-    onComplete: () => { enemy.label && enemy.label.destroy(); enemy.destroy(); }
-  });
-}
-
-adjustWorldSpeed() {
-  this.groups.obstacles.getChildren().forEach(o => { if (o.active) o.body.setVelocityX(-this.state.worldSpeed); });
-  this.groups.enemies.getChildren().forEach(e => { if (e.active) e.body.setVelocityX(-this.state.worldSpeed * Tuning.enemySpeedFactor); });
-  this.groups.items.getChildren().forEach(i => { if (i.active) i.body.setVelocityX(-this.state.worldSpeed * Tuning.itemSpeedFactor); });
-}
-
-flashWord() { this.cameras.main.flash(80, 247, 118, 142, false); }
-
-update(time, delta) {
-  if (this.state.gameOver) return; // nach Game Over keine Updates
-
-  // Labels folgen + Offscreen aufräumen
-  this.groups.obstacles.getChildren().forEach(o => {
-    if (!o.active) return;
-    if (o.label) { o.label.x = o.x; o.label.y = o.y - o.displayHeight / 2 - 20; }
-    if (o.x < -100) { o.label && o.label.destroy(); o.destroy(); delete this.state.jumpTriggerX[o.id]; }
-  });
-  this.groups.enemies.getChildren().forEach(e => {
-    if (!e.active) return;
-    if (e.label) { e.label.x = e.x; e.label.y = e.y - e.displayHeight / 2 - 18; }
-    if (e.x < -100) { e.label && e.label.destroy(); e.destroy(); }
-  });
-  this.groups.items.getChildren().forEach(i => {
-    if (!i.active) return;
-    if (i.label) { i.label.x = i.x; i.label.y = i.y - i.displayHeight / 2 - 18; }
-    if (i.x < -100) { i.label && i.label.destroy(); i.destroy(); }
-  });
-
-  // Zuverlässiger Auto‑Sprung
-  const playerFront = this.player.body.x + this.player.body.width;
-  Object.keys(this.state.jumpTriggerX).forEach(idStr => {
-    const id = +idStr; const triggerX = this.state.jumpTriggerX[id];
-    const obst = this.groups.obstacles.getChildren().find(o => o.id === id && o.active);
-    if (!obst) { delete this.state.jumpTriggerX[id]; return; }
-    const safeWindow = 10;
-    if (playerFront >= triggerX - safeWindow && this.player.body.onFloor()) {
-      this.player.setVelocityY(-Tuning.jumpStrength);
-      delete this.state.jumpTriggerX[id];
-    }
-    const leftEdge = obst.x - obst.displayWidth / 2;
-    if (playerFront > leftEdge + 6 && this.player.body.onFloor() && this.state.jumpTriggerX[id]) {
-      this.player.setVelocityY(-Tuning.jumpStrength);
-      delete this.state.jumpTriggerX[id];
-    }
-  });
-
-  // Ziel ggf. neu wählen
-  if (!this.state.target || !this.state.target.active ||
-      (this.state.target.type === 'obstacle' && this.state.target.cleared) ||
-      (this.state.target.type === 'enemy' && this.state.target.destroyed) ||
-      (this.state.target.type === 'item' && this.state.target.readyToCollect) ||
-      (this.state.target.x < this.player.x - 20)) {
-    this.chooseTarget();
-  }
-
-  this.updateHUD();
-}
-
-updateHUD() {
-  const minutes = Math.max(0.0001, (performance.now() - this.state.startTime) / 60000);
-  const wpm = Math.round((this.state.correctChars / 5) / minutes);
-  const acc = (this.state.correctChars + this.state.errors) > 0
-    ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
-    : 100;
-  this.hudText.setText(`Score: ${this.state.score}   WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}`);
