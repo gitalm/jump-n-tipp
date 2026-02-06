@@ -3,57 +3,52 @@ const WIDTH = 960;
 const HEIGHT = 540;
 const GROUND_H = 56;
 
-// Layer-Tiefen
-const FG_LABEL_DEPTH = 900;   // Wortkästen + Texte
-const OVERLAY_DEPTH = 995;    // Game-Over
+// Tiefen
+const FG_LABEL_DEPTH = 900;
+const OVERLAY_DEPTH = 995;
 
-// Level-Presets (behutsame Beschleunigung)
+// Level-Presets (behutsam)
 const LevelPresets = {
 einfach: { initialSpeed: 150, accelPerMinute: 8,  obstacleDelayMs: 2800, enemyDelayMs: 6000, itemDelayMs: 9000, maxExtraSpeed: 80 },
 mittel:  { initialSpeed: 180, accelPerMinute: 12, obstacleDelayMs: 2400, enemyDelayMs: 5200, itemDelayMs: 8000, maxExtraSpeed: 100 },
 schnell: { initialSpeed: 220, accelPerMinute: 16, obstacleDelayMs: 2000, enemyDelayMs: 4500, itemDelayMs: 7200, maxExtraSpeed: 120 }
 };
 
-const COLORS = {
-typed: '#0a7f3f',
-rest: '#083056',
-enemyLabel: '#9b2c2c',
-itemLabel: '#0b315a'
-};
-
+const COLORS = { typed: '#0a7f3f', rest: '#083056', enemyRest: '#9b2c2c', itemRest: '#0b315a' };
 const AUDIO = { bgmVol: 0.25, sfxVol: 0.6 };
 
-// Größen/Verhalten
-const PLAYER_SCALE = 0.95;
-const PRESENTER_SCALE = 0.45;   // Vogel halb so groß
-const BUBBLE_PAD_X = 12;
-const BUBBLE_PAD_Y = 8;
-const BUBBLE_RADIUS = 10;
-const GAP_OBST = 20;
-const GAP_ENEMY = 18;
-
-// Sprung
-const PRE_JUMP_PX = 56;
-const SAFE_WINDOW = 14;
+// Physik/Timing
 const GRAVITY_Y = 2000;
 const JUMP_STRENGTH = 720;
+const PRE_JUMP_PX = 56;
+const SAFE_WINDOW = 14;
 
-const PIRATE_OBSTACLES = [
-{ key: 'pirate_barrel', path: 'assets/obstacles/barrel.png', scale: 0.62 },
-{ key: 'pirate_thorn_big', path: 'assets/obstacles/big_thorns.png', scale: 0.78 },
-{ key: 'pirate_thorn_small', path: 'assets/obstacles/small_thorn.png', scale: 0.86 },
-{ key: 'env_ship', path: 'assets/environment/ship.png', scale: 0.75 }
+// Größen
+const PLAYER_SCALE = 0.95;
+const PIGEON_SCALE = 0.45; // halb so groß
+const GAP_OBST = 20;
+const GAP_ENEMY = 18;
+const PAD_X = 12;
+const PAD_Y = 8;
+const RADIUS = 10;
+
+// Assets
+const OBSTACLES = [
+{ key: 'barrel', path: 'assets/obstacles/barrel.png', scale: 0.62 },
+{ key: 'thorn_big', path: 'assets/obstacles/big_thorns.png', scale: 0.78 },
+{ key: 'thorn_small', path: 'assets/obstacles/small_thorn.png', scale: 0.86 },
+{ key: 'ship', path: 'assets/environment/ship.png', scale: 0.75 }
 ];
-const PIRATE_ENEMIES = [
-{ key: 'pirate_parrot_enemy', path: 'assets/characters/parrot.png', scale: 0.85, type: 'air' },
-{ key: 'env_skull', path: 'assets/environment/skull.png', scale: 0.9, type: 'air' },
-{ key: 'pirate_crab', path: 'assets/environment/crab.png', scale: 0.95, type: 'ground' }
+const ENEMIES = [
+{ key: 'skull', path: 'assets/environment/skull.png', scale: 0.9, type: 'air' },
+{ key: 'parrot_enemy', path: 'assets/characters/parrot.png', scale: 0.85, type: 'air' },
+{ key: 'crab', path: 'assets/environment/crab.png', scale: 0.95, type: 'ground' }
 ];
-const BONUS_ITEMS = [
-{ key: 'item_coin', path: 'assets/items/coin.png', scale: 0.8, word: 'muenze', points: 50 },
-{ key: 'item_heart', path: 'assets/items/heart.png', scale: 0.8, word: 'herz', points: 50 },
-{ key: 'item_chest', path: 'assets/items/chest.png', scale: 0.85, word: 'schatz', points: 75 },
-{ key: 'item_compass', path: 'assets/items/compass.png', scale: 0.7, word: 'uhr', points: 50 }
+const ITEMS = [
+{ key: 'coin', path: 'assets/items/coin.png', scale: 0.8, word: 'muenze', points: 50 },
+{ key: 'heart', path: 'assets/items/heart.png', scale: 0.8, word: 'herz', points: 50 },
+{ key: 'chest', path: 'assets/items/chest.png', scale: 0.85, word: 'schatz', points: 75 },
+{ key: 'compass', path: 'assets/items/compass.png', scale: 0.7, word: 'uhr', points: 50 }
 ];
 
 class GameScene extends Phaser.Scene {
@@ -81,33 +76,32 @@ this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
   this.groups = {};
   this.sounds = {};
   this.ui = {};
-  this.presenter = {}; // {pigeon}
+  this.presenter = {};
 }
 
 preload() {
   // Wörter
   this.load.text('woerter', 'woerter.txt');
 
-  // Animationen: Parrot, Pigeon (Einzelbilder)
+  // Spieler & Pigeon (Frames)
   this.load.image('parrot1', 'assets/characters/parrot.png');
   this.load.image('parrot2', 'assets/characters/parrot2.png');
   this.load.image('parrot3', 'assets/characters/parrot3.png');
-
   this.load.image('pigeon1', 'assets/characters/pigeon.png');
   this.load.image('pigeon2', 'assets/characters/pigeon2.png');
   this.load.image('pigeon3', 'assets/characters/pigeon3.png');
 
-  // Spielobjekte
-  PIRATE_OBSTACLES.forEach(o => this.load.image(o.key, o.path));
-  PIRATE_ENEMIES.forEach(e => this.load.image(e.key, e.path));
-  BONUS_ITEMS.forEach(i => this.load.image(i.key, i.path));
+  // Objekte
+  OBSTACLES.forEach(a => this.load.image(a.key, a.path));
+  ENEMIES.forEach(a => this.load.image(a.key, a.path));
+  ITEMS.forEach(a => this.load.image(a.key, a.path));
 
   // Sounds
   this.load.audio('sfx_kling', 'assets/sounds/kling.mp3');
   this.load.audio('sfx_jump',  'assets/sounds/jump.mp3');
   this.load.audio('bgm',       'assets/sounds/bgm.mp3');
 
-  // Platzhalter + Boden + Bubble-Grund (wir zeichnen pro Objekt dynamisch via Graphics)
+  // Boden + Platzhalter
   const g = this.make.graphics({ x: 0, y: 0, add: false });
   g.fillStyle(0x3fa34c).fillRect(0, 0, WIDTH, GROUND_H);
   g.generateTexture('groundVis', WIDTH, GROUND_H); g.clear();
@@ -128,7 +122,7 @@ create() {
   // Wörter
   const raw = this.cache.text.get('woerter') || '';
   this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
-  if (this.state.words.length === 0) this.state.words = ['muenze','herz','schatz','uhr','lauf','spring'];
+  if (!this.state.words.length) this.state.words = ['muenze','herz','schatz','uhr','lauf','spring'];
   Phaser.Utils.Array.Shuffle(this.state.words);
 
   // Boden
@@ -137,31 +131,18 @@ create() {
   this.ground = physGround;
 
   // Animationen
-  const parrotFrames = [
-    { key: this.textures.exists('parrot1') ? 'parrot1' : 'ph_player' },
-    { key: this.textures.exists('parrot2') ? 'parrot2' : 'parrot1' },
-    { key: this.textures.exists('parrot3') ? 'parrot3' : 'parrot2' }
-  ];
+  const parrotFrames = [{ key: 'parrot1' }, { key: 'parrot2' }, { key: 'parrot3' }];
   this.anims.create({ key: 'parrot_run',  frames: parrotFrames, frameRate: 6, repeat: -1 });
-  this.anims.create({ key: 'parrot_jump', frames: [parrotFrames[1]], frameRate: 1, repeat: -1 });
+  this.anims.create({ key: 'parrot_jump', frames: [{ key: 'parrot2' }], frameRate: 1, repeat: -1 });
 
-  const p2Key = this.textures.exists('pigeon2') ? 'pigeon2' : 'pigeon1';
-  const p3Key = this.textures.exists('pigeon3') ? 'pigeon3' : p2Key;
-  const pigeonFrames = [
-    { key: this.textures.exists('pigeon1') ? 'pigeon1' : 'ph_player' },
-    { key: p2Key }, { key: p3Key }, { key: p2Key }
-  ];
+  const pigeonFrames = [{ key: 'pigeon1' }, { key: 'pigeon2' }, { key: 'pigeon3' }, { key: 'pigeon2' }];
   this.anims.create({ key: 'pigeon_talk', frames: pigeonFrames, frameRate: 3, yoyo: true, repeat: -1 });
 
   // Spieler
-  const playerStartKey = this.textures.exists('parrot1') ? 'parrot1' : 'ph_player';
-  const playerY = HEIGHT - GROUND_H - 40;
-  this.player = this.physics.add.sprite(140, playerY, playerStartKey);
-  this.player.setScale(PLAYER_SCALE);
+  this.player = this.physics.add.sprite(140, HEIGHT - GROUND_H - 40, 'parrot1').setScale(PLAYER_SCALE);
   this.player.setCollideWorldBounds(true);
   this.player.body.setSize(this.player.displayWidth * 0.6, this.player.displayHeight * 0.7);
   this.player.body.setOffset(this.player.displayWidth * 0.2, this.player.displayHeight * 0.15);
-  this.player.body.setMaxVelocityY(1200);
   this.physics.add.collider(this.player, physGround);
   this.player.anims.play('parrot_run');
 
@@ -178,15 +159,9 @@ create() {
   this.groups.items     = this.physics.add.group({ allowGravity: false });
 
   // Kollisionen
-  this.physics.add.collider(this.player, this.groups.obstacles, (player, obst) => {
-    if (!obst.cleared) this.gameOver('Mit Hindernis kollidiert');
-  });
-  this.physics.add.overlap(this.player, this.groups.enemies, (player, enemy) => {
-    if (!enemy.destroyed) this.gameOver('Von Gegner getroffen');
-  });
-  this.physics.add.overlap(this.player, this.groups.items, (player, item) => {
-    if (item.readyToCollect) this.collectItem(item);
-  });
+  this.physics.add.collider(this.player, this.groups.obstacles, (_, obst) => { if (!obst.cleared) this.gameOver('Mit Hindernis kollidiert'); });
+  this.physics.add.overlap(this.player, this.groups.enemies,  (_, enemy) => { if (!enemy.destroyed) this.gameOver('Von Gegner getroffen'); });
+  this.physics.add.overlap(this.player, this.groups.items,    (_, item)  => { if (item.readyToCollect) this.collectItem(item); });
 
   // HUD
   this.ui.hud = this.add.text(12, 10, '', { fontFamily: 'monospace', fontSize: 18, color: '#083056' }).setDepth(FG_LABEL_DEPTH);
@@ -195,19 +170,17 @@ create() {
   this.ui.msg = this.add.text(WIDTH/2, HEIGHT/2, '', { fontFamily: 'system-ui', fontSize: 28, color: '#083056' })
     .setOrigin(0.5).setDepth(OVERLAY_DEPTH + 1).setAlpha(0);
 
-  // Präsentations-Vogel (ohne Text), fliegt zu aktueller Wort-Blase
-  const pigeonStartKey = this.textures.exists('pigeon1') ? 'pigeon1' : 'ph_player';
-  this.presenter.pigeon = this.add.sprite(120, HEIGHT - GROUND_H - 220, pigeonStartKey)
-    .setScale(PRESENTER_SCALE).setDepth(FG_LABEL_DEPTH - 1);
+  // Pigeon (ohne Text) – folgt der aktiven Wort-Blase
+  this.presenter.pigeon = this.add.sprite(120, HEIGHT - GROUND_H - 220, 'pigeon1').setScale(PIGEON_SCALE).setDepth(FG_LABEL_DEPTH - 1);
   this.presenter.pigeon.anims.play('pigeon_talk');
 
-  // Eingabe: nur Shift+M mutet
+  // Eingabe: nur Shift+M mutet; sonst normal tippen
   this.input.keyboard.on('keydown', (e) => {
-    if (e.shiftKey && (e.key || '').toLowerCase() === 'm') {
-      const newMute = !this.sound.mute;
-      this.sound.mute = newMute;
-      if (this.sounds.bgm) this.sounds.bgm.mute = newMute;
-      this.toast(newMute ? 'Alle Sounds aus' : 'Alle Sounds an');
+    const k = (e.key || '').toLowerCase();
+    if (e.shiftKey && k === 'm') {
+      const muted = !this.sound.mute;
+      this.sound.mute = muted; if (this.sounds.bgm) this.sounds.bgm.mute = muted;
+      this.toast(muted ? 'Alle Sounds aus' : 'Alle Sounds an');
       return;
     }
     this.handleKey(e);
@@ -215,18 +188,17 @@ create() {
 
   // Spawner
   this.spawnTimerObstacles = this.time.addEvent({ delay: this.level.obstacleDelayMs, loop: true, callback: () => this.spawnObstacle() });
-  this.spawnTimerEnemies   = this.time.addEvent({ delay: this.level.enemyDelayMs, loop: true, callback: () => this.spawnEnemy() });
-  this.spawnTimerItems     = this.time.addEvent({ delay: this.level.itemDelayMs, loop: true, callback: () => this.spawnItem() });
+  this.spawnTimerEnemies   = this.time.addEvent({ delay: this.level.enemyDelayMs,   loop: true, callback: () => this.spawnEnemy() });
+  this.spawnTimerItems     = this.time.addEvent({ delay: this.level.itemDelayMs,    loop: true, callback: () => this.spawnItem() });
 
-  // Direkt Sichtbares
+  // Direkt etwas sichtbar
   this.spawnObstacle();
   this.spawnItem();
 
   this.state.startTime = performance.now();
-  this.updateHUD();
-  this.updatePointsLog();
-  this.updatePresenterWord();
+  this.updateHUD(); this.updatePointsLog();
 
+  // Level-Buttons
   this.setupLevelButtons();
 }
 
@@ -235,77 +207,71 @@ setupLevelButtons() {
   Object.values(ids).forEach(id => document.getElementById(id)?.classList.remove('active'));
   document.getElementById(ids[this.levelName])?.classList.add('active');
   Object.entries(ids).forEach(([name, id]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
+    const el = document.getElementById(id); if (!el) return;
     el.onclick = () => { localStorage.setItem('jnt_level', name); this.scene.restart(); };
   });
 }
 
-// Utilities
-ensureTexture(key, fallback) { return this.textures.exists(key) ? key : fallback; }
-clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+// Hilfsfunktionen: Wortbox als Container (Graphics + 2 Texte)
+createWordUI(obj, restColor) {
+  const cont = this.add.container(0, 0).setDepth(FG_LABEL_DEPTH);
+  const g = this.add.graphics(); cont.add(g);
+  const tTyped = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: 18, color: COLORS.typed }).setOrigin(0, 0.5);
+  const tRest  = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: 18, color: restColor }).setOrigin(0, 0.5);
+  cont.add([tTyped, tRest]);
 
-// Kasten + Texte pro Objekt
-makeWordBoxFor(obj, colorRest) {
-  // Texte
-  obj.labelTyped = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: 18, color: COLORS.typed })
-    .setOrigin(0, 0.5).setDepth(FG_LABEL_DEPTH + 1);
-  obj.labelRest  = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: 18, color: colorRest })
-    .setOrigin(0, 0.5).setDepth(FG_LABEL_DEPTH + 1);
-  // Blase als Graphics (dynamisch skaliert)
-  obj.bubble = this.add.graphics().setDepth(FG_LABEL_DEPTH);
-  obj.bubbleW = 0; obj.bubbleH = 0; // gemerkte Maße
-  this.layoutWordBox(obj);
+  obj.ui = { cont, g, tTyped, tRest, restColor };
+  this.updateWordUI(obj, '', obj.word);
 }
 
-setLabelTexts(obj, typed, rest) {
-  if (!obj.labelTyped || !obj.labelRest) return;
-  obj.labelTyped.setText(typed);
-  obj.labelRest.setText(rest);
-  this.layoutWordBox(obj);
+updateWordUI(obj, typed = null, rest = null) {
+  if (!obj.ui) return;
+  const { cont, g, tTyped, tRest } = obj.ui;
+
+  if (typed !== null) tTyped.setText(typed);
+  if (rest !== null)  tRest.setText(rest);
+
+  // Größe bestimmen
+  const totalW = tTyped.width + tRest.width;
+  const textH  = Math.max(tTyped.height, tRest.height);
+  const bw = Math.max(44, totalW + PAD_X * 2);
+  const bh = Math.max(24, textH + PAD_Y * 2);
+
+  // Position über Objekt
+  const gap = obj.type === 'enemy' ? GAP_ENEMY : GAP_OBST;
+  const cx = obj.x;
+  const cy = obj.y - (obj.displayHeight || 0) / 2 - gap;
+
+  cont.setPosition(cx, cy);
+
+  // Texte mittig im Kasten
+  const leftX = -totalW / 2;
+  tTyped.setPosition(leftX, 0);
+  tRest.setPosition(leftX + tTyped.width, 0);
+
+  // Kasten zeichnen
+  g.clear();
+  g.fillStyle(0xffffff, 0.95);
+  g.lineStyle(2, 0xe5e9f0, 1);
+  g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, RADIUS);
+  g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, RADIUS);
+
+  // Tiefen absichern
+  cont.setDepth(FG_LABEL_DEPTH);
+  tTyped.setDepth(FG_LABEL_DEPTH + 1);
+  tRest.setDepth(FG_LABEL_DEPTH + 1);
 }
 
-layoutWordBox(obj) {
-  if (!obj.active) return;
-  const gap = (obj.type === 'enemy') ? GAP_ENEMY : GAP_OBST;
-  const centerX = obj.x;
-  const y = obj.y - (obj.displayHeight || 0) / 2 - gap;
-
-  const typedW = obj.labelTyped.width;
-  const restW  = obj.labelRest.width;
-  const totalW = typedW + restW;
-
-  const leftX = centerX - totalW / 2;
-  obj.labelTyped.setPosition(leftX, y);
-  obj.labelRest.setPosition(leftX + typedW, y);
-
-  // Blase berechnen
-  const textH = Math.max(obj.labelTyped.height, obj.labelRest.height);
-  const bw = Math.max(44, totalW + BUBBLE_PAD_X * 2);
-  const bh = Math.max(24, textH + BUBBLE_PAD_Y * 2);
-
-  obj.bubble.clear();
-  obj.bubble.fillStyle(0xffffff, 0.95);
-  obj.bubble.lineStyle(2, 0xe5e9f0, 1);
-  obj.bubble.fillRoundedRect(centerX - bw / 2, y - bh / 2, bw, bh, BUBBLE_RADIUS);
-  obj.bubble.strokeRoundedRect(centerX - bw / 2, y - bh / 2, bw, bh, BUBBLE_RADIUS);
-
-  obj.bubbleW = bw; obj.bubbleH = bh;
+destroyWordUI(obj) {
+  if (!obj.ui) return;
+  obj.ui.cont.destroy(); obj.ui = null;
 }
 
-bubbleCenter(obj) {
-  const gap = (obj.type === 'enemy') ? GAP_ENEMY : GAP_OBST;
-  const centerX = obj.x;
-  const y = obj.y - (obj.displayHeight || 0) / 2 - gap;
-  return { x: centerX, y: y };
-}
-
-// Pigeon zur aktuellen Blase fliegen lassen
-flyPresenterTo(obj) {
-  if (!obj || !this.presenter.pigeon) return;
-  const c = this.bubbleCenter(obj);
-  const targetX = this.clamp(c.x - 160, 60, WIDTH - 60);
-  const targetY = this.clamp(c.y - 40, 40, HEIGHT - GROUND_H - 120);
+// Pigeon fliegt zur Wortbox (wenn im Bild sichtbar)
+flyPigeonTo(obj) {
+  if (!obj || !obj.ui) return;
+  const targetX = Phaser.Math.Clamp(obj.ui.cont.x - 140, 60, WIDTH - 60);
+  const targetY = Phaser.Math.Clamp(obj.ui.cont.y - 30, 40, HEIGHT - GROUND_H - 120);
   const d = Phaser.Math.Distance.Between(this.presenter.pigeon.x, this.presenter.pigeon.y, targetX, targetY);
   const dur = Phaser.Math.Clamp(200 + d * 1.2, 200, 900);
   this.tweens.add({ targets: this.presenter.pigeon, x: targetX, y: targetY, duration: dur, ease: 'Sine.easeInOut' });
@@ -313,117 +279,111 @@ flyPresenterTo(obj) {
 
 // Spawns
 spawnObstacle() {
-  const def = Phaser.Utils.Array.GetRandom(PIRATE_OBSTACLES);
+  const def = Phaser.Utils.Array.GetRandom(OBSTACLES);
   const id = this.state.idCounter++;
   const x = WIDTH + 120;
 
-  const temp = this.add.image(0, 0, this.ensureTexture(def.key, 'ph_player')).setScale(def.scale);
-  const hPix = temp.displayHeight; temp.destroy();
+  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
+  const h = temp.displayHeight; temp.destroy();
 
-  const y = HEIGHT - GROUND_H - hPix / 2;
-  const sprite = this.groups.obstacles.create(x, y, def.key);
-  sprite.setScale(def.scale).setImmovable(true);
-  sprite.body.setVelocityX(-this.state.worldSpeed);
-  sprite.body.setSize(sprite.displayWidth * 0.8, sprite.displayHeight * 0.85);
-  sprite.body.setOffset(sprite.displayWidth * 0.1, sprite.displayHeight * 0.1);
-  sprite.cleared = false; sprite.type = 'obstacle'; sprite.id = id;
+  const y = HEIGHT - GROUND_H - h / 2;
+  const o = this.groups.obstacles.create(x, y, def.key);
+  o.setScale(def.scale).setImmovable(true);
+  o.body.setVelocityX(-this.state.worldSpeed);
+  o.body.setSize(o.displayWidth * 0.8, o.displayHeight * 0.85);
+  o.body.setOffset(o.displayWidth * 0.1, o.displayHeight * 0.1);
+  o.cleared = false; o.type = 'obstacle'; o.id = id;
+  o.word = this.nextWord();
 
-  sprite.word = this.nextWord();
-  this.makeWordBoxFor(sprite, COLORS.rest);
-  this.setLabelTexts(sprite, '', sprite.word);
-
+  this.createWordUI(o, COLORS.rest);
   if (!this.state.target) this.chooseTarget();
 }
 
 spawnEnemy() {
-  const def = Phaser.Utils.Array.GetRandom(PIRATE_ENEMIES);
+  const def = Phaser.Utils.Array.GetRandom(ENEMIES);
   const id = this.state.idCounter++;
   const x = WIDTH + 140;
 
-  const temp = this.add.image(0, 0, this.ensureTexture(def.key, 'ph_player')).setScale(def.scale);
-  const hPix = temp.displayHeight; temp.destroy();
+  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
+  const h = temp.displayHeight; temp.destroy();
 
   const groundY = HEIGHT - GROUND_H;
-  const altitude = def.type === 'ground' ? (groundY - hPix / 2) : (groundY - GROUND_H - Phaser.Math.Between(100, 160));
+  const altitude = def.type === 'ground' ? (groundY - h / 2) : (groundY - GROUND_H - Phaser.Math.Between(100, 160));
+  const e = this.groups.enemies.create(x, altitude, def.key);
+  e.setScale(def.scale).setImmovable(true);
+  e.body.setVelocityX(-this.state.worldSpeed * 1.02);
+  e.destroyed = false; e.type = 'enemy'; e.id = id;
+  e.word = this.nextWord({ preferShort: true });
 
-  const sprite = this.groups.enemies.create(x, altitude, def.key);
-  sprite.setScale(def.scale).setImmovable(true);
-  sprite.body.setVelocityX(-this.state.worldSpeed * 1.02);
-  sprite.destroyed = false; sprite.type = 'enemy'; sprite.id = id;
-
-  sprite.word = this.nextWord({ preferShort: true });
-  this.makeWordBoxFor(sprite, COLORS.enemyLabel);
-  this.setLabelTexts(sprite, '', sprite.word);
-
+  this.createWordUI(e, COLORS.enemyRest);
   if (!this.state.target) this.chooseTarget();
 }
 
 spawnItem() {
-  const def = Phaser.Utils.Array.GetRandom(BONUS_ITEMS);
+  const def = Phaser.Utils.Array.GetRandom(ITEMS);
   const id = this.state.idCounter++;
   const x = WIDTH + 160;
 
-  const temp = this.add.image(0, 0, this.ensureTexture(def.key, 'ph_player')).setScale(def.scale);
-  const hPix = temp.displayHeight; temp.destroy();
+  const temp = this.add.image(0, 0, def.key).setScale(def.scale);
+  const h = temp.displayHeight; temp.destroy();
 
   const groundY = HEIGHT - GROUND_H;
-  const altitude = Phaser.Math.Between(0, 1) ? (groundY - hPix / 2) : (groundY - GROUND_H - Phaser.Math.Between(90, 150));
+  const altitude = Phaser.Math.Between(0, 1) ? (groundY - h / 2) : (groundY - GROUND_H - Phaser.Math.Between(90, 150));
+  const it = this.groups.items.create(x, altitude, def.key);
+  it.setScale(def.scale).setImmovable(true);
+  it.body.setVelocityX(-this.state.worldSpeed);
+  it.type = 'item'; it.id = id; it.word = def.word; it.points = def.points;
+  it.readyToCollect = false;
 
-  const sprite = this.groups.items.create(x, altitude, def.key);
-  sprite.setScale(def.scale).setImmovable(true);
-  sprite.body.setVelocityX(-this.state.worldSpeed);
-  sprite.type = 'item'; sprite.id = id; sprite.word = def.word; sprite.points = def.points;
-  sprite.readyToCollect = false;
-
-  this.makeWordBoxFor(sprite, COLORS.itemLabel);
-  this.setLabelTexts(sprite, '', def.word);
-
+  this.createWordUI(it, COLORS.itemRest);
   if (!this.state.target) this.chooseTarget();
 }
 
 // Wörter
 nextWord(opts = {}) {
-  if (this.state.words.length === 0) {
+  if (!this.state.words.length) {
     const raw = this.cache.text.get('woerter') || '';
     this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
     Phaser.Utils.Array.Shuffle(this.state.words);
   }
   if (opts.preferShort) {
-    const idx = this.state.words.findIndex(w => w.length <= 6);
-    if (idx > -1) return this.state.words.splice(idx, 1)[0];
+    const i = this.state.words.findIndex(w => w.length <= 6);
+    if (i > -1) return this.state.words.splice(i, 1)[0];
   }
   return this.state.words.shift();
 }
 
-// Ziel wählen
+// Ziel wählen (bevorzugt, wenn im Bild)
 chooseTarget() {
   const c = [];
-  this.groups.obstacles.getChildren().forEach(o => { if (o.active && !o.cleared && o.x > this.player.x - 10) c.push(o); });
-  this.groups.enemies.getChildren().forEach(e   => { if (e.active && !e.destroyed && e.x > this.player.x - 10) c.push(e); });
-  this.groups.items.getChildren().forEach(i     => { if (i.active && !i.readyToCollect && i.x > this.player.x - 10) c.push(i); });
+  const push = obj => { if (obj.active && !(obj.type === 'obstacle' && obj.cleared) && !(obj.type === 'enemy' && obj.destroyed)) c.push(obj); };
+  this.groups.obstacles.getChildren().forEach(push);
+  this.groups.enemies.getChildren().forEach(push);
+  this.groups.items.getChildren().forEach(i => { if (i.active && !i.readyToCollect) c.push(i); });
 
-  if (c.length === 0) {
-    this.state.target = null;
-    this.state.typedIndex = 0;
-    return;
-  }
+  if (!c.length) { this.state.target = null; this.state.typedIndex = 0; return; }
+
   c.sort((a, b) => a.x - b.x);
-  const target = c[0];
-  this.state.target = target;
+  // Nächstes Objekt im sichtbaren Bereich, sonst das nächste insgesamt
+  const visible = c.find(o => o.x < WIDTH - 60);
+  const t = visible || c[0];
+
+  this.state.target = t;
   this.state.typedIndex = 0;
   this.updateTargetLabelProgress();
-  this.flyPresenterTo(target);
+  // Nur fliegen, wenn die Box bereits im Bild ist
+  if (t.x < WIDTH - 60) this.flyPigeonTo(t);
 }
 
 // Eingabe
 handleKey(e) {
   if (this.state.gameOver) return;
   if (!this.state.target) return;
-  const key = e.key;
-  if (!key || key.length !== 1) return;
+  const k = e.key;
+  if (!k || k.length !== 1) return;
 
   const expected = this.normalize(this.state.target.word[this.state.typedIndex] || '');
-  const got = this.normalize(key);
+  const got = this.normalize(k);
 
   if (got === expected) {
     this.state.typedIndex++; this.state.correctChars++;
@@ -434,15 +394,14 @@ handleKey(e) {
   }
   this.updateHUD();
 }
-
 normalize(ch) { return ch.toLowerCase(); }
 
 updateTargetLabelProgress() {
   const t = this.state.target;
-  if (!t) return;
+  if (!t || !t.ui) return;
   const typed = t.word.slice(0, this.state.typedIndex);
   const rest  = t.word.slice(this.state.typedIndex);
-  this.setLabelTexts(t, typed, rest);
+  this.updateWordUI(t, typed, rest);
 }
 
 addPoints(reason, pts) {
@@ -452,7 +411,6 @@ addPoints(reason, pts) {
   this.updatePointsLog();
   this.toast(`+${pts} ${reason}`);
 }
-
 updatePointsLog() {
   const lines = ['Punkte-Log:'];
   for (let i = this.state.eventLog.length - 1; i >= 0; i--) {
@@ -463,48 +421,36 @@ updatePointsLog() {
   this.ui.log.setText(lines.join('\n'));
 }
 
-onWordCompleted(target) {
-  if (target.type === 'obstacle') {
-    target.cleared = true;
-    target.body.checkCollision.none = true;
-    const triggerX = (target.x - target.displayWidth / 2) - PRE_JUMP_PX;
-    this.state.jumpTriggerX[target.id] = triggerX;
+onWordCompleted(t) {
+  if (t.type === 'obstacle') {
+    t.cleared = true; t.body.checkCollision.none = true;
+    this.state.jumpTriggerX[t.id] = (t.x - t.displayWidth / 2) - PRE_JUMP_PX;
     this.addPoints('Hindernis', 10);
-  } else if (target.type === 'enemy') {
-    this.destroyEnemy(target);
-    this.addPoints('Gegner', 20);
-  } else if (target.type === 'item') {
-    target.readyToCollect = true;
-    const triggerX = (target.x - target.displayWidth / 2) - PRE_JUMP_PX;
-    this.state.jumpTriggerX[target.id] = triggerX;
-    this.collectItem(target);
+  } else if (t.type === 'enemy') {
+    this.destroyEnemy(t); this.addPoints('Gegner', 20);
+  } else if (t.type === 'item') {
+    t.readyToCollect = true;
+    this.state.jumpTriggerX[t.id] = (t.x - t.displayWidth / 2) - PRE_JUMP_PX;
+    this.collectItem(t);
   }
-
   this.state.clears++;
   this.state.target = null;
   this.chooseTarget();
 }
 
-collectItem(item) {
-  if (!item.active) return;
-  this.sounds.kling && this.sounds.kling.play();
-  const pts = item.points || 25;
-  const name = item.word || 'Item';
-  item.labelTyped?.destroy(); item.labelRest?.destroy(); item.bubble?.destroy();
-  item.destroy();
+collectItem(it) {
+  if (!it.active) return;
+  this.sounds.kling?.play();
+  const pts = it.points || 25;
+  const name = it.word || 'Item';
+  this.destroyWordUI(it); it.destroy();
   this.addPoints(name, pts);
 }
-
-destroyEnemy(enemy) {
-  enemy.destroyed = true;
-  enemy.body.checkCollision.none = true;
+destroyEnemy(e) {
+  e.destroyed = true; e.body.checkCollision.none = true;
   this.tweens.add({
-    targets: [enemy],
-    scale: 0.2, alpha: 0, duration: 180,
-    onComplete: () => {
-      enemy.labelTyped?.destroy(); enemy.labelRest?.destroy(); enemy.bubble?.destroy();
-      enemy.destroy();
-    }
+    targets: [e], scale: 0.2, alpha: 0, duration: 180,
+    onComplete: () => { this.destroyWordUI(e); e.destroy(); }
   });
 }
 
@@ -520,7 +466,7 @@ flashWord() { this.cameras.main.flash(80, 247, 118, 142, false); }
 update() {
   if (this.state.gameOver) return;
 
-  // Animation
+  // Lauf-/Sprunganimation
   if (this.player.body.onFloor()) {
     if (this.player.anims.currentAnim?.key !== 'parrot_run') this.player.anims.play('parrot_run', true);
   } else {
@@ -530,21 +476,13 @@ update() {
   // Sanfte Beschleunigung
   const minutes = (performance.now() - this.state.startTime) / 60000;
   const targetSpeed = this.level.initialSpeed + Math.min(this.level.maxExtraSpeed, this.level.accelPerMinute * minutes);
-  if (Math.abs(targetSpeed - this.state.worldSpeed) > 0.5) {
-    this.state.worldSpeed = targetSpeed;
-    this.adjustWorldSpeed();
-  }
+  if (Math.abs(targetSpeed - this.state.worldSpeed) > 0.5) { this.state.worldSpeed = targetSpeed; this.adjustWorldSpeed(); }
 
-  // Word-Boxen mit Objekten bewegen, im Vordergrund halten
-  const relayout = (obj, gap) => {
-    if (!obj.active) return;
-    this.layoutWordBox(obj);
-    obj.labelTyped?.setDepth(FG_LABEL_DEPTH);
-    obj.labelRest?.setDepth(FG_LABEL_DEPTH);
-  };
-  this.groups.obstacles.getChildren().forEach(o => { relayout(o, GAP_OBST); if (o.x < -100) { o.labelTyped?.destroy(); o.labelRest?.destroy(); o.bubble?.destroy(); o.destroy(); delete this.state.jumpTriggerX[o.id]; } });
-  this.groups.enemies.getChildren().forEach(e => { relayout(e, GAP_ENEMY); if (e.x < -100) { e.labelTyped?.destroy(); e.labelRest?.destroy(); e.bubble?.destroy(); e.destroy(); } });
-  this.groups.items.getChildren().forEach(i => { relayout(i, GAP_ENEMY); if (i.x < -100) { i.labelTyped?.destroy(); i.labelRest?.destroy(); i.bubble?.destroy(); i.destroy(); } });
+  // Wort-UI an Objekte koppeln und Vordergrund sichern
+  const stickUI = obj => { if (!obj.active || !obj.ui) return; this.updateWordUI(obj); obj.ui.cont.setDepth(FG_LABEL_DEPTH); };
+  this.groups.obstacles.getChildren().forEach(o => { stickUI(o); if (o.x < -100) { this.destroyWordUI(o); o.destroy(); delete this.state.jumpTriggerX[o.id]; } });
+  this.groups.enemies.getChildren().forEach(e => { stickUI(e); if (e.x < -100) { this.destroyWordUI(e); e.destroy(); } });
+  this.groups.items.getChildren().forEach(i => { stickUI(i); if (i.x < -100) { this.destroyWordUI(i); i.destroy(); } });
 
   // Auto-Sprung
   const playerFront = this.player.body.x + this.player.body.width;
@@ -556,18 +494,14 @@ update() {
     const leftEdge = obj.x - obj.displayWidth / 2;
 
     if (playerFront >= triggerX - SAFE_WINDOW && this.player.body.onFloor()) {
-      this.player.setVelocityY(-JUMP_STRENGTH);
-      this.sounds.jump && this.sounds.jump.play();
-      delete this.state.jumpTriggerX[id];
+      this.player.setVelocityY(-JUMP_STRENGTH); this.sounds.jump?.play(); delete this.state.jumpTriggerX[id];
     }
     if (playerFront > leftEdge + 6 && this.player.body.onFloor() && this.state.jumpTriggerX[id]) {
-      this.player.setVelocityY(-JUMP_STRENGTH);
-      this.sounds.jump && this.sounds.jump.play();
-      delete this.state.jumpTriggerX[id];
+      this.player.setVelocityY(-JUMP_STRENGTH); this.sounds.jump?.play(); delete this.state.jumpTriggerX[id];
     }
   });
 
-  // Ziel prüfen/wechseln
+  // Ziel ggf. neu wählen
   if (!this.state.target || !this.state.target.active ||
       (this.state.target.type === 'obstacle' && this.state.target.cleared) ||
       (this.state.target.type === 'enemy' && this.state.target.destroyed) ||
@@ -582,9 +516,7 @@ update() {
 updateHUD() {
   const minutes = Math.max(0.0001, (performance.now() - this.state.startTime) / 60000);
   const wpm = Math.round((this.state.correctChars / 5) / minutes);
-  const acc = (this.state.correctChars + this.state.errors) > 0
-    ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
-    : 100;
+  const acc = (this.state.correctChars + this.state.errors) > 0 ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors)) : 100;
   const speed = Math.round(this.state.worldSpeed);
   this.ui.hud.setText(`Score: ${this.state.score}   WPM: ${wpm}   Genauigkeit: ${acc}%   Clears: ${this.state.clears}   Speed: ${speed}`);
 }
@@ -597,40 +529,37 @@ toast(msg) {
 }
 
 gameOver(reason) {
+  // Spawner stoppen
   this.spawnTimerObstacles?.remove();
   this.spawnTimerEnemies?.remove();
   this.spawnTimerItems?.remove();
 
+  // Physik pausieren, Eingabe aktiv lassen
   this.physics.world.pause();
   this.state.gameOver = true;
 
   const minutes = Math.max(0.0001, (performance.now() - this.state.startTime) / 60000);
   const wpm = Math.round((this.state.correctChars / 5) / minutes);
-  const acc = (this.state.correctChars + this.state.errors) > 0
-    ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors))
-    : 100;
+  const acc = (this.state.correctChars + this.state.errors) > 0 ? Math.round(100 * this.state.correctChars / (this.state.correctChars + this.state.errors)) : 100;
 
   const entry = { ts: Date.now(), score: this.state.score, wpm, acc, clears: this.state.clears, log: this.state.eventLog, level: this.levelName };
-  const hist = JSON.parse(localStorage.getItem('jnt_history') || '[]');
-  hist.push(entry);
+  const hist = JSON.parse(localStorage.getItem('jnt_history') || '[]'); hist.push(entry);
   localStorage.setItem('jnt_history', JSON.stringify(hist));
 
   const center = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH*0.80, 260, 0x000000, 0.35).setDepth(OVERLAY_DEPTH);
   const lines = [
-    `Game Over`,
-    `${reason}`,
+    `Game Over`, `${reason}`,
     `Score: ${this.state.score} | WPM: ${wpm} | Genauigkeit: ${acc}% | Clears: ${this.state.clears} | Level: ${this.levelName}`,
-    `Letzte Punkte:`,
-    ...this.state.eventLog.slice(-6).map(e => `+${e.pts} ${e.reason}`),
+    `Letzte Punkte:`, ...this.state.eventLog.slice(-6).map(e => `+${e.pts} ${e.reason}`),
     `Drücke R oder Enter, oder klicke, um neu zu starten`
   ];
-  const text = this.add.text(WIDTH/2, HEIGHT/2, lines.join('\n'), {
-    fontFamily: 'system-ui', fontSize: 18, color: '#083056', align: 'center'
-  }).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 1);
+  const text = this.add.text(WIDTH/2, HEIGHT/2, lines.join('\n'), { fontFamily: 'system-ui', fontSize: 18, color: '#083056', align: 'center' })
+    .setOrigin(0.5).setDepth(OVERLAY_DEPTH + 1);
 
   const restart = () => { center.destroy(); text.destroy(); this.scene.restart(); };
-  const rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
-  const enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+  // Zuverlässige Listener
+  const rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R, false);
+  const enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER, false);
   rKey.once('down', restart);
   enterKey.once('down', restart);
   this.input.once('pointerdown', restart);
