@@ -9,9 +9,9 @@ const OVERLAY_DEPTH = 995;
 
 // Level-Presets (behutsam)
 const LevelPresets = {
-einfach: { initialSpeed: 80, accelPerMinute: 8,  obstacleDelayMs: 2800, enemyDelayMs: 7000, itemDelayMs: 9000, maxExtraSpeed: 100 },
-mittel:  { initialSpeed: 110, accelPerMinute: 12, obstacleDelayMs: 2400, enemyDelayMs: 6000, itemDelayMs: 8000, maxExtraSpeed: 100 },
-schnell: { initialSpeed: 200, accelPerMinute: 16, obstacleDelayMs: 2000, enemyDelayMs: 5000, itemDelayMs: 7200, maxExtraSpeed: 120 }
+einfach: { initialSpeed: 60, accelPerMinute: 8,  obstacleDelayMs: 2800, enemyDelayMs: 7000, itemDelayMs: 9000, maxExtraSpeed: 100 },
+mittel:  { initialSpeed: 90, accelPerMinute: 12, obstacleDelayMs: 2400, enemyDelayMs: 6000, itemDelayMs: 8000, maxExtraSpeed: 100 },
+schnell: { initialSpeed: 120, accelPerMinute: 16, obstacleDelayMs: 2000, enemyDelayMs: 5000, itemDelayMs: 7200, maxExtraSpeed: 120 }
 };
 
 const COLORS = { typed: '#0a7f3f', rest: '#083056', enemyRest: '#9b2c2c', itemRest: '#0b315a' };
