@@ -91,6 +91,10 @@ init() {
 preload() {
   // Wörter
   this.load.text('woerter', 'woerter.txt');
+  
+	// Ein kleiner weißer Pixel für Partikel
+	g.fillStyle(0xffffff).fillRect(0, 0, 4, 4);
+	g.generateTexture('partikelPixel', 4, 4);
 
   // Spieler & Pigeon (Frames)
   this.load.image('parrot1', 'assets/characters/parrot.png');
@@ -455,6 +459,10 @@ onWordCompleted(t) {
 
 collectItem(it) {
   if (!it.active) return;
+  
+  // NEU: Goldener Partikel-Burst
+  this.createBurst(it.x, it.y, [0xffd700, 0xffff00, 0xffa500], 20);
+  
   this.sounds.kling?.play();
   const pts = it.points || 25;
   const name = it.word || 'Item';
@@ -462,7 +470,10 @@ collectItem(it) {
   this.addPoints(name, pts);
 }
 destroyEnemy(e) {
-  e.destroyed = true; e.body.checkCollision.none = true;
+  e.destroyed = true; 
+    // NEU: Roter/Grauer Partikel-Burst (Gegner-Farbe)
+  this.createBurst(e.x, e.y, [0x9b2c2c, 0x4a5568, 0xffffff], 25);
+  e.body.checkCollision.none = true;
   this.tweens.add({
     targets: [e], scale: 0.2, alpha: 0, duration: 180,
     onComplete: () => { this.destroyWordUI(e); e.destroy(); }
@@ -589,6 +600,25 @@ gameOver(reason) {
   rKey.once('down', restart);
   enterKey.once('down', restart);
   this.input.once('pointerdown', restart);
+}
+
+createBurst(x, y, color, count = 15) {
+  const particles = this.add.particles(x, y, 'partikelPixel', {
+    color: color,
+    speed: { min: 50, max: 200 },
+    angle: { min: 0, max: 360 },
+    scale: { start: 1.5, end: 0 },
+    lifespan: 600,
+    gravityY: 300, // Partikel fallen physikalisch nach unten
+    
+    emitting: false // Nicht dauerhaft sprühen
+  });
+
+  // Einmalig die Partikel herausschießen
+  particles.explode(count);
+
+  // Nach 1 Sekunde das Partikel-System wieder löschen, um RAM zu sparen
+  this.time.delayedCall(1000, () => particles.destroy());
 }
 
 }
