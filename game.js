@@ -9,9 +9,9 @@ const OVERLAY_DEPTH = 995;
 
 // Level-Presets (behutsam)
 const LevelPresets = {
-einfach: { initialSpeed: 80, accelPerMinute: 8,  obstacleDelayMs: 2800, enemyDelayMs: 6000, itemDelayMs: 9000, maxExtraSpeed: 100 },
-mittel:  { initialSpeed: 110, accelPerMinute: 12, obstacleDelayMs: 2400, enemyDelayMs: 5200, itemDelayMs: 8000, maxExtraSpeed: 100 },
-schnell: { initialSpeed: 200, accelPerMinute: 16, obstacleDelayMs: 2000, enemyDelayMs: 4500, itemDelayMs: 7200, maxExtraSpeed: 120 }
+einfach: { initialSpeed: 80, accelPerMinute: 8,  obstacleDelayMs: 2800, enemyDelayMs: 7000, itemDelayMs: 9000, maxExtraSpeed: 100 },
+mittel:  { initialSpeed: 110, accelPerMinute: 12, obstacleDelayMs: 2400, enemyDelayMs: 6000, itemDelayMs: 8000, maxExtraSpeed: 100 },
+schnell: { initialSpeed: 200, accelPerMinute: 16, obstacleDelayMs: 2000, enemyDelayMs: 5000, itemDelayMs: 7200, maxExtraSpeed: 120 }
 };
 
 const COLORS = { typed: '#0a7f3f', rest: '#083056', enemyRest: '#9b2c2c', itemRest: '#0b315a' };
@@ -238,7 +238,8 @@ updateWordUI(obj, typed = null, rest = null) {
   const bh = Math.max(24, textH + PAD_Y * 2);
 
   // Position über Objekt
-  const gap = obj.type === 'enemy' ? GAP_ENEMY : GAP_OBST;
+  const gap = obj.type === 'item' ? 80 : (obj.type === 'enemy' ? GAP_ENEMY : GAP_OBST);
+  // Items bekommen hier 80 Pixel Abstand statt 20, so hängen sie über den Hindernissen.
   const cx = obj.x;
   const cy = obj.y - (obj.displayHeight || 0) / 2 - gap;
 
