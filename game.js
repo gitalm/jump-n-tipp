@@ -15,9 +15,9 @@ const ACTIVE_WORD_DEPTH = 2000;
 const OVERLAY_DEPTH = 3000;
 
 const LevelPresets = {
-  einfach: { initialSpeed: 50, accelPerMinute: 4,  obstacleDelayMs: 5500, enemyDelayMs: 9500, itemDelayMs: 12000, maxExtraSpeed: 70 },
-  mittel:  { initialSpeed: 70, accelPerMinute: 7,  obstacleDelayMs: 4500, enemyDelayMs: 8000, itemDelayMs: 10000, maxExtraSpeed: 90 },
-  schnell: { initialSpeed: 110, accelPerMinute: 12, obstacleDelayMs: 3500, enemyDelayMs: 6500, itemDelayMs: 8500, maxExtraSpeed: 140 }
+  einfach: { initialSpeed: 60, accelPerMinute: 4,  obstacleDelayMs: 5000, enemyDelayMs: 9000, itemDelayMs: 11000, maxExtraSpeed: 70 },
+  mittel:  { initialSpeed: 80, accelPerMinute: 7,  obstacleDelayMs: 4000, enemyDelayMs: 7500, itemDelayMs: 9000, maxExtraSpeed: 90 },
+  schnell: { initialSpeed: 120, accelPerMinute: 12, obstacleDelayMs: 3000, enemyDelayMs: 6000, itemDelayMs: 8000, maxExtraSpeed: 140 }
 };
 
 const COLORS = { typed: '#0a7f3f', rest: '#083056', enemyRest: '#9b2c2c', itemRest: '#0b315a' };
@@ -63,45 +63,41 @@ class GameScene extends Phaser.Scene {
     this.load.audio('bgm',       'assets/sounds/bgm.mp3');
 
     const g = this.make.graphics({ x: 0, y: 0, add: false });
+    g.fillStyle(0xffffff).fillRect(0, 0, 6, 6);
+    g.generateTexture('partikelPixel', 6, 6); g.clear();
     g.fillStyle(0x3fa34c).fillRect(0, 0, WIDTH, GROUND_H);
     g.generateTexture('groundVis', WIDTH, GROUND_H); g.clear();
     g.fillStyle(0x000000).fillRect(0, 0, WIDTH, GROUND_H);
     g.generateTexture('groundPhys', WIDTH, GROUND_H); g.clear();
-    g.fillStyle(0xffffff).fillRect(0, 0, 6, 6);
-    g.generateTexture('partikelPixel', 6, 6); g.destroy();
-    
-    // Hintergründe
-    const g2 = this.make.graphics({ x: 0, y: 0, add: false });
-    g2.fillStyle(0xffffff, 0.4); g2.fillCircle(40, 40, 25); g2.fillCircle(70, 45, 35); g2.fillCircle(110, 40, 25);
-    g2.generateTexture('bg_clouds', 200, 100); g2.clear();
-    g2.fillStyle(0x5ca0e6, 1); g2.fillRect(0, 0, 256, 128); g2.fillStyle(0xffffff, 0.2); g2.fillRect(20, 30, 60, 3);
-    g2.generateTexture('bg_sea', 256, 128); g2.destroy();
+    g.fillStyle(0xffffff, 0.4); g.fillCircle(40, 40, 25); g.fillCircle(70, 45, 35); g.fillCircle(110, 40, 25);
+    g.generateTexture('bg_clouds', 200, 100); g.clear();
+    g.fillStyle(0x5ca0e6, 1); g.fillRect(0, 0, 256, 128); g.fillStyle(0xffffff, 0.2); g.fillRect(20, 30, 60, 3);
+    g.generateTexture('bg_sea', 256, 128); g.destroy();
   }
 
   create() {
     this.physics.world.resume();
     this.cameras.main.setBackgroundColor('#7ec4ff');
-    
     this.clouds = this.add.tileSprite(0, 60, WIDTH, 100, 'bg_clouds').setOrigin(0,0).setAlpha(0.6).setDepth(BG_CLOUDS_DEPTH);
     this.seaBaseY = HEIGHT - GROUND_H - 150;
     this.sea = this.add.tileSprite(0, this.seaBaseY, WIDTH, 256, 'bg_sea').setOrigin(0,0).setDepth(BG_SEA_DEPTH);
     this.add.image(WIDTH/2, HEIGHT - GROUND_H/2, 'groundVis').setDepth(GROUND_DEPTH);
     const physGround = this.physics.add.staticImage(WIDTH/2, HEIGHT - GROUND_H/2, 'groundPhys').setAlpha(0);
 
-    // Spieler
     this.player = this.physics.add.sprite(140, HEIGHT - GROUND_H - 100, 'parrot1').setScale(0.95).setDepth(PLAYER_DEPTH);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, physGround);
 
-    // Pigeon (Sanfte Taube)
-    this.presenter.pigeon = this.add.sprite(WIDTH/2, 150, 'pigeon1').setScale(0.5).setDepth(PIGEON_DEPTH);
+    this.presenter.pigeon = this.add.sprite(WIDTH/2, 100, 'pigeon1').setScale(0.5).setDepth(PIGEON_DEPTH);
 
     this.anims.create({ key: 'parrot_run',  frames: [{key:'parrot1'}, {key:'parrot2'}, {key:'parrot3'}], frameRate: 6, repeat: -1 });
     this.anims.create({ key: 'parrot_jump', frames: [{key:'parrot2'}], frameRate: 1, repeat: -1 });
     this.player.anims.play('parrot_run');
 
+    // Wörter-Fallback
     const raw = this.cache.text.get('woerter') || '';
     this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
+    if (!this.state.words.length) this.state.words = ['pirat','gold','anker','ahoi','schiff','schatz','meer','insel'];
     Phaser.Utils.Array.Shuffle(this.state.words);
 
     this.groups.obstacles = this.physics.add.group({ allowGravity: false });
@@ -120,9 +116,11 @@ class GameScene extends Phaser.Scene {
     this.ui.hud = this.add.text(20, 20, '', { fontSize: 22, color: '#083056', fontStyle: 'bold' }).setDepth(OVERLAY_DEPTH);
     this.input.keyboard.on('keydown', e => this.handleKey(e));
 
+    // Spawner: Erstes Hindernis SOFORT
+    this.spawnObstacle(); 
     this.time.addEvent({ delay: this.level.obstacleDelayMs, loop: true, callback: () => this.spawnObstacle() });
-    this.time.delayedCall(6000, () => { this.time.addEvent({ delay: this.level.itemDelayMs, loop: true, callback: () => this.spawnItem() }); });
-    this.time.delayedCall(12000, () => { this.time.addEvent({ delay: this.level.enemyDelayMs, loop: true, callback: () => this.spawnEnemy() }); });
+    this.time.delayedCall(7000, () => { this.time.addEvent({ delay: this.level.itemDelayMs, loop: true, callback: () => this.spawnItem() }); });
+    this.time.delayedCall(15000, () => { this.time.addEvent({ delay: this.level.enemyDelayMs, loop: true, callback: () => this.spawnEnemy() }); });
 
     this.setupLevelButtons();
   }
@@ -133,7 +131,6 @@ class GameScene extends Phaser.Scene {
     const elapsed = (performance.now() - this.state.startTime) / 60000;
     this.state.worldSpeed = this.level.initialSpeed + Math.min(this.level.maxExtraSpeed, this.level.accelPerMinute * elapsed);
 
-    // Animationen
     const anim = this.player.anims.currentAnim ? this.player.anims.currentAnim.key : '';
     if (this.player.body.onFloor()) {
         if (anim !== 'parrot_run') this.player.anims.play('parrot_run');
@@ -151,23 +148,29 @@ class GameScene extends Phaser.Scene {
       if (obj.body) obj.body.setVelocityX(-this.state.worldSpeed * (obj.type === 'enemy' ? 1.1 : 1.0));
       obj.ui.cont.setDepth(obj === this.state.target ? ACTIVE_WORD_DEPTH : UI_DEPTH);
       
-      // SPRUNG-LOGIK: Wenn Objekt fertig getippt UND nah genug am Spieler UND Spieler am Boden
-      if (obj.readyToJump && this.player.body.onFloor() && obj.x > this.player.x && obj.x < this.player.x + 220) {
+      // SPRUNG-LOGIK
+      if (obj.readyToJump && this.player.body.onFloor() && obj.x > this.player.x && obj.x < this.player.x + 250) {
         this.player.setVelocityY(-820);
         this.sounds.jump.play();
-        obj.readyToJump = false; // Nur einmal springen
+        obj.readyToJump = false; 
       }
-
       if (obj.x < -180) { if(obj.ui) obj.ui.cont.destroy(); obj.destroy(); }
     };
     [...this.groups.obstacles.getChildren(), ...this.groups.enemies.getChildren(), ...this.groups.items.getChildren()].forEach(stick);
 
-    // Pigeon geschmeidig fliegen lassen
+    // Zielfindung
+    if (!this.state.target) {
+        this.chooseTarget();
+    } else if (!this.state.target.active) {
+        this.state.target = null;
+    }
+
+    // Pigeon-Flug
     if (this.state.target) {
         const tx = this.state.target.x - 140;
-        const ty = this.state.target.y - 120 + Math.sin(this.time.now / 400) * 15;
-        this.presenter.pigeon.x += (tx - this.presenter.pigeon.x) * 0.03; // Geschmeidiger (0.03)
-        this.presenter.pigeon.y += (ty - this.presenter.pigeon.y) * 0.03;
+        const ty = this.state.target.y - 120 + Math.sin(this.time.now / 500) * 15;
+        this.presenter.pigeon.x += (tx - this.presenter.pigeon.x) * 0.035;
+        this.presenter.pigeon.y += (ty - this.presenter.pigeon.y) * 0.035;
     }
 
     this.updateHUD();
@@ -191,51 +194,41 @@ class GameScene extends Phaser.Scene {
 
   onWordCompleted(t) {
     if (t.body) t.body.checkCollision.none = true; 
-
-    // Visueller Effekt beim Beenden (Wortbox hüpft kurz)
     this.tweens.add({ targets: t.ui.cont, scale: 1.4, duration: 120, yoyo: true });
 
     if (t.type === 'obstacle') {
-      t.cleared = true; this.state.score += 10;
-      t.readyToJump = true; // Flag für den Sprung setzen
+      t.cleared = true; this.state.score += 10; t.readyToJump = true;
     } else if (t.type === 'enemy') {
-      this.state.score += 25;
-      this.createBurst(t.x, t.y, 0x9b2c2c, 25); 
+      this.state.score += 25; this.createBurst(t.x, t.y, 0x9b2c2c, 25); 
       t.destroyed = true; if(t.ui) t.ui.cont.destroy(); t.destroy();
     } else if (t.type === 'item') {
-      t.readyToCollect = true; 
-      t.readyToJump = true; 
+      t.readyToCollect = true; t.readyToJump = true; 
     }
     this.state.target = null;
     this.chooseTarget();
   }
 
   collectItem(it) {
-    this.createBurst(it.x, it.y, 0xffd700, 30); // Goldene Explosion
-    this.sounds.kling.play(); 
-    this.state.score += 50; 
+    this.createBurst(it.x, it.y, 0xffd700, 35); 
+    this.sounds.kling.play(); this.state.score += 50; 
     if(it.ui) it.ui.cont.destroy(); it.destroy();
   }
 
   createBurst(x, y, color, count) {
     const p = this.add.particles(x, y, 'partikelPixel', {
       color: [color, 0xffffff, 0xffae00],
-      speed: { min: 100, max: 300 },
-      lifespan: 1000,
-      gravityY: 500,
-      scale: { start: 1.2, end: 0 },
-      emitting: false
+      speed: { min: 100, max: 350 },
+      lifespan: 900, gravityY: 500, scale: { start: 1.3, end: 0 }, emitting: false
     });
     p.explode(count);
-    this.time.delayedCall(1500, () => p.destroy());
+    this.time.delayedCall(1200, () => p.destroy());
   }
 
   spawnObstacle() {
     const d = Phaser.Utils.Array.GetRandom(OBSTACLES);
     const o = this.groups.obstacles.create(WIDTH + 150, 0, d.key).setImmovable(true).setDepth(OBJ_DEPTH);
     let s = d.key === 'ship' ? Phaser.Math.FloatBetween(0.5, 0.8) : d.scale;
-    o.setScale(s).setDepth(OBJ_DEPTH);
-    o.y = HEIGHT - GROUND_H - (o.displayHeight / 2) + 5; 
+    o.setScale(s); o.y = HEIGHT - GROUND_H - (o.displayHeight / 2) + 5; 
     o.id = this.state.idCounter++; o.type = 'obstacle'; o.word = this.nextWord();
     this.createWordUI(o, COLORS.rest);
   }
@@ -253,13 +246,16 @@ class GameScene extends Phaser.Scene {
     this.createWordUI(i, COLORS.itemRest);
   }
 
-  nextWord() { return this.state.words.shift() || 'ahoi'; }
+  nextWord() { return this.state.words.shift() || 'pirat'; }
 
   chooseTarget() {
     const pot = [...this.groups.obstacles.getChildren(), ...this.groups.enemies.getChildren(), ...this.groups.items.getChildren()]
-      .filter(o => o.active && !o.cleared && !o.destroyed && !o.readyToCollect && o.x > 180)
+      .filter(o => o.active && !o.cleared && !o.destroyed && !o.readyToCollect && o.x > 150)
       .sort((a,b) => a.x - b.x);
-    this.state.target = pot[0] || null; this.state.typedIndex = 0;
+    if (pot.length > 0) {
+        this.state.target = pot[0];
+        this.state.typedIndex = 0;
+    }
   }
 
   createWordUI(obj, color) {
