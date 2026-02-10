@@ -16,8 +16,8 @@ const OVERLAY_DEPTH = 3000;
 
 const LevelPresets = {
   einfach: { initialSpeed: 60, accelPerMinute: 4,  obstacleDelayMs: 5000, enemyDelayMs: 9000, itemDelayMs: 11000, maxExtraSpeed: 70 },
-  mittel:  { initialSpeed: 80, accelPerMinute: 7,  obstacleDelayMs: 4000, enemyDelayMs: 7500, itemDelayMs: 9000, maxExtraSpeed: 90 },
-  schnell: { initialSpeed: 120, accelPerMinute: 12, obstacleDelayMs: 3000, enemyDelayMs: 6000, itemDelayMs: 8000, maxExtraSpeed: 140 }
+  mittel:  { initialSpeed: 85, accelPerMinute: 7,  obstacleDelayMs: 4000, enemyDelayMs: 7500, itemDelayMs: 9500, maxExtraSpeed: 95 },
+  schnell: { initialSpeed: 130, accelPerMinute: 12, obstacleDelayMs: 3200, enemyDelayMs: 6500, itemDelayMs: 8500, maxExtraSpeed: 150 }
 };
 
 const COLORS = { typed: '#0a7f3f', rest: '#083056', enemyRest: '#9b2c2c', itemRest: '#0b315a' };
@@ -94,10 +94,9 @@ class GameScene extends Phaser.Scene {
     this.anims.create({ key: 'parrot_jump', frames: [{key:'parrot2'}], frameRate: 1, repeat: -1 });
     this.player.anims.play('parrot_run');
 
-    // Wörter-Fallback
     const raw = this.cache.text.get('woerter') || '';
     this.state.words = raw.split(/\r?\n/).map(w => w.trim()).filter(Boolean);
-    if (!this.state.words.length) this.state.words = ['pirat','gold','anker','ahoi','schiff','schatz','meer','insel'];
+    if (!this.state.words.length) this.state.words = ['pirat','gold','anker','ahoi','insel','schatz','meer'];
     Phaser.Utils.Array.Shuffle(this.state.words);
 
     this.groups.obstacles = this.physics.add.group({ allowGravity: false });
@@ -116,7 +115,7 @@ class GameScene extends Phaser.Scene {
     this.ui.hud = this.add.text(20, 20, '', { fontSize: 22, color: '#083056', fontStyle: 'bold' }).setDepth(OVERLAY_DEPTH);
     this.input.keyboard.on('keydown', e => this.handleKey(e));
 
-    // Spawner: Erstes Hindernis SOFORT
+    // Spawner
     this.spawnObstacle(); 
     this.time.addEvent({ delay: this.level.obstacleDelayMs, loop: true, callback: () => this.spawnObstacle() });
     this.time.delayedCall(7000, () => { this.time.addEvent({ delay: this.level.itemDelayMs, loop: true, callback: () => this.spawnItem() }); });
@@ -148,29 +147,25 @@ class GameScene extends Phaser.Scene {
       if (obj.body) obj.body.setVelocityX(-this.state.worldSpeed * (obj.type === 'enemy' ? 1.1 : 1.0));
       obj.ui.cont.setDepth(obj === this.state.target ? ACTIVE_WORD_DEPTH : UI_DEPTH);
       
-      // SPRUNG-LOGIK
-      if (obj.readyToJump && this.player.body.onFloor() && obj.x > this.player.x && obj.x < this.player.x + 250) {
+      // PRÄZISE SPRUNG-LOGIK (Abstand ca. 70-100 Pixel zum Piraten)
+      if (obj.readyToJump && this.player.body.onFloor() && obj.x > this.player.x + 30 && obj.x < this.player.x + 110) {
         this.player.setVelocityY(-820);
         this.sounds.jump.play();
         obj.readyToJump = false; 
+        // Erst JETZT, wo der Sprung läuft, schalten wir die Kollision ab
+        if (obj.body) obj.body.checkCollision.none = true; 
       }
       if (obj.x < -180) { if(obj.ui) obj.ui.cont.destroy(); obj.destroy(); }
     };
     [...this.groups.obstacles.getChildren(), ...this.groups.enemies.getChildren(), ...this.groups.items.getChildren()].forEach(stick);
 
-    // Zielfindung
-    if (!this.state.target) {
-        this.chooseTarget();
-    } else if (!this.state.target.active) {
-        this.state.target = null;
-    }
+    if (!this.state.target) this.chooseTarget();
 
-    // Pigeon-Flug
     if (this.state.target) {
         const tx = this.state.target.x - 140;
-        const ty = this.state.target.y - 120 + Math.sin(this.time.now / 500) * 15;
-        this.presenter.pigeon.x += (tx - this.presenter.pigeon.x) * 0.035;
-        this.presenter.pigeon.y += (ty - this.presenter.pigeon.y) * 0.035;
+        const ty = this.state.target.y - 120 + Math.sin(this.time.now / 600) * 15;
+        this.presenter.pigeon.x += (tx - this.presenter.pigeon.x) * 0.03;
+        this.presenter.pigeon.y += (ty - this.presenter.pigeon.y) * 0.03;
     }
 
     this.updateHUD();
@@ -193,13 +188,14 @@ class GameScene extends Phaser.Scene {
   }
 
   onWordCompleted(t) {
-    if (t.body) t.body.checkCollision.none = true; 
+    // Wortbox "Poppt" visuell (Tween)
     this.tweens.add({ targets: t.ui.cont, scale: 1.4, duration: 120, yoyo: true });
 
     if (t.type === 'obstacle') {
       t.cleared = true; this.state.score += 10; t.readyToJump = true;
     } else if (t.type === 'enemy') {
-      this.state.score += 25; this.createBurst(t.x, t.y, 0x9b2c2c, 25); 
+      this.state.score += 25; 
+      this.createBurst(t.x, t.y, 0x9b2c2c, 25); 
       t.destroyed = true; if(t.ui) t.ui.cont.destroy(); t.destroy();
     } else if (t.type === 'item') {
       t.readyToCollect = true; t.readyToJump = true; 
@@ -209,19 +205,25 @@ class GameScene extends Phaser.Scene {
   }
 
   collectItem(it) {
+    // KRÄFTIGER MÜNZ-EFFEKT (Partikel)
     this.createBurst(it.x, it.y, 0xffd700, 35); 
-    this.sounds.kling.play(); this.state.score += 50; 
+    this.sounds.kling.play(); 
+    this.state.score += 50; 
     if(it.ui) it.ui.cont.destroy(); it.destroy();
   }
 
   createBurst(x, y, color, count) {
     const p = this.add.particles(x, y, 'partikelPixel', {
-      color: [color, 0xffffff, 0xffae00],
-      speed: { min: 100, max: 350 },
-      lifespan: 900, gravityY: 500, scale: { start: 1.3, end: 0 }, emitting: false
+      color: [color, 0xffffff, 0xffea00],
+      speed: { min: 100, max: 400 },
+      lifespan: 800,
+      gravityY: 500,
+      scale: { start: 1.5, end: 0 },
+      emitting: false
     });
     p.explode(count);
-    this.time.delayedCall(1200, () => p.destroy());
+    // Aufräumen
+    this.time.delayedCall(1000, () => p.destroy());
   }
 
   spawnObstacle() {
@@ -250,12 +252,9 @@ class GameScene extends Phaser.Scene {
 
   chooseTarget() {
     const pot = [...this.groups.obstacles.getChildren(), ...this.groups.enemies.getChildren(), ...this.groups.items.getChildren()]
-      .filter(o => o.active && !o.cleared && !o.destroyed && !o.readyToCollect && o.x > 150)
+      .filter(o => o.active && !o.cleared && !o.destroyed && !o.readyToCollect && o.x > 160)
       .sort((a,b) => a.x - b.x);
-    if (pot.length > 0) {
-        this.state.target = pot[0];
-        this.state.typedIndex = 0;
-    }
+    if (pot.length > 0) { this.state.target = pot[0]; this.state.typedIndex = 0; }
   }
 
   createWordUI(obj, color) {
