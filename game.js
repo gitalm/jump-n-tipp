@@ -14,9 +14,9 @@ const ACTIVE_WORD_DEPTH = 2000;
 const OVERLAY_DEPTH = 3000;
 
 const LevelPresets = {
-  einfach: { initialSpeed: 80, accelPerMinute: 8,  obstacleDelayMs: 2800, enemyDelayMs: 6000, itemDelayMs: 9000, maxExtraSpeed: 100 },
-  mittel:  { initialSpeed: 110, accelPerMinute: 12, obstacleDelayMs: 2400, enemyDelayMs: 5200, itemDelayMs: 8000, maxExtraSpeed: 100 },
-  schnell: { initialSpeed: 200, accelPerMinute: 16, obstacleDelayMs: 2000, enemyDelayMs: 4500, itemDelayMs: 7200, maxExtraSpeed: 120 }
+  einfach: { initialSpeed: 60, accelPerMinute: 8,  obstacleDelayMs: 3000, enemyDelayMs: 6000, itemDelayMs: 9000, maxExtraSpeed: 150 },
+  mittel:  { initialSpeed: 100, accelPerMinute: 12, obstacleDelayMs: 2400, enemyDelayMs: 5200, itemDelayMs: 8000, maxExtraSpeed: 200 },
+  schnell: { initialSpeed: 170, accelPerMinute: 16, obstacleDelayMs: 2000, enemyDelayMs: 4500, itemDelayMs: 7200, maxExtraSpeed: 220 }
 };
 
 const COLORS = { typed: '#0a7f3f', rest: '#083056', enemyRest: '#9b2c2c', itemRest: '#0b315a' };
