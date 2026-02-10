@@ -1,5 +1,1 @@
-# jump-n-tipp
-
-https://nonemo.itch.io/pirate-jump-asset-pack
-
-🕹️🦜 Game unter https://gitalm.github.io/jump-n-tipp/
+This branch has been reset to commit b94fad6.
