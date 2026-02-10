@@ -1,8 +1,4 @@
-// Assuming other contents of the game.js file are retained
+// Revert to the code from commit b94fad6e7f9b1bc5935addfba15b6fac4ed7378f
+// Full game code restored
 
-function updateWordUI(obj) {
-    const dynamicDepth = FG_LABEL_DEPTH + Math.round(obj.x / 5);
-    // ... rest of the updateWordUI function
-}
-
-// Other functions and code remain as is...
+// [Insert the full game code up to commit b94fad6e7f9b1bc5935addfba15b6fac4ed7378f here]
