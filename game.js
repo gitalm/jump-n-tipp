@@ -57,28 +57,34 @@ class GameScene extends Phaser.Scene {
     // Hier nichts mehr mit localStorage laden!
   }
 
-  // Diese Methode wird bei jedem Start/Neustart aufgerufen
-  init() {
-    this.levelName = localStorage.getItem('jnt_level') || 'mittel';
-    this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
+init() {
+  // 1. Level-Daten laden
+  this.levelName = localStorage.getItem('jnt_level') || 'mittel';
+  this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
 
-    // State zurücksetzen, damit alles frisch startet
-    this.state = {
-      words: [],
-      worldSpeed: this.level.initialSpeed,
-      score: 0,
-      correctChars: 0,
-      errors: 0,
-      startTime: performance.now(),
-      clears: 0,
-      target: null,
-      typedIndex: 0,
-      jumpTriggerX: {},
-      idCounter: 1,
-      gameOver: false,
-      eventLog: []
-    };
-  }
+  // 2. State-Objekt initialisieren
+  this.state = {
+    words: [],
+    worldSpeed: this.level.initialSpeed,
+    score: 0,
+    correctChars: 0,
+    errors: 0,
+    startTime: performance.now(),
+    clears: 0,
+    target: null,
+    typedIndex: 0,
+    jumpTriggerX: {},
+    idCounter: 1,
+    gameOver: false,
+    eventLog: []
+  };
+
+  // 3. WICHTIG: Diese leeren Objekte müssen hier definiert werden!
+  this.groups = {};
+  this.sounds = {};
+  this.ui = {};
+  this.presenter = {};
+}
 
 preload() {
   // Wörter
@@ -251,9 +257,15 @@ updateWordUI(obj, typed = null, rest = null) {
   tRest.setPosition(leftX + tTyped.width, 0);
 
   // Kasten zeichnen
-  g.clear();
-  g.fillStyle(0xffffff, 0.95);
-  g.lineStyle(2, 0xe5e9f0, 1);
+	// Kasten zeichnen
+	g.clear();
+	g.fillStyle(0xffffff, 0.95);
+
+	if (obj === this.state.target) {
+	  g.lineStyle(3, 0xffb300, 1); // Goldener, dickerer Rahmen für das aktive Wort
+	} else {
+	  g.lineStyle(2, 0xe5e9f0, 1); // Normaler Rahmen
+	}
   g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, RADIUS);
   g.strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, RADIUS);
 
@@ -480,7 +492,18 @@ update() {
   if (Math.abs(targetSpeed - this.state.worldSpeed) > 0.5) { this.state.worldSpeed = targetSpeed; this.adjustWorldSpeed(); }
 
   // Wort-UI an Objekte koppeln und Vordergrund sichern
-  const stickUI = obj => { if (!obj.active || !obj.ui) return; this.updateWordUI(obj); obj.ui.cont.setDepth(FG_LABEL_DEPTH); };
+	const stickUI = obj => { 
+	  if (!obj.active || !obj.ui) return; 
+	  this.updateWordUI(obj); 
+
+	  // Wenn das Objekt das aktuelle Ziel ist, setze die Tiefe extrem hoch (z.B. 2000)
+	  // Alle anderen bleiben auf dem Standard-Level (900)
+	  if (obj === this.state.target) {
+		obj.ui.cont.setDepth(2000); 
+	  } else {
+		obj.ui.cont.setDepth(FG_LABEL_DEPTH);
+	  }
+	};
   this.groups.obstacles.getChildren().forEach(o => { stickUI(o); if (o.x < -100) { this.destroyWordUI(o); o.destroy(); delete this.state.jumpTriggerX[o.id]; } });
   this.groups.enemies.getChildren().forEach(e => { stickUI(e); if (e.x < -100) { this.destroyWordUI(e); e.destroy(); } });
   this.groups.items.getChildren().forEach(i => { stickUI(i); if (i.x < -100) { this.destroyWordUI(i); i.destroy(); } });
