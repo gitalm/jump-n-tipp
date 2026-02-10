@@ -61,6 +61,8 @@ init() {
   // 1. Level-Daten laden
   this.levelName = localStorage.getItem('jnt_level') || 'mittel';
   this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
+  // WICHTIG: Stoppt alle Sounds der vorherigen Runde
+  this.sound.stopAll(); 
 
   // 2. State-Objekt initialisieren
   this.state = {
