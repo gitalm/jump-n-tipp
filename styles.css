@@ -45,6 +45,11 @@ background: #69b7ff;
 border-color: #3b98ea;
 font-weight: 600;
 }
+.lvl.active {
+    background: #083056 !important;
+    color: white !important;
+    font-weight: bold;
+}
 .levelbar .hint {
 margin-left: auto;
 font-size: 12px;

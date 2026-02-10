@@ -52,32 +52,33 @@ const ITEMS = [
 ];
 
 class GameScene extends Phaser.Scene {
-constructor() {
-super('game');
-this.levelName = localStorage.getItem('jnt_level') || 'mittel';
-this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
+  constructor() {
+    super('game');
+    // Hier nichts mehr mit localStorage laden!
+  }
 
-  this.state = {
-    words: [],
-    worldSpeed: this.level.initialSpeed,
-    score: 0,
-    correctChars: 0,
-    errors: 0,
-    startTime: performance.now(),
-    clears: 0,
-    target: null,
-    typedIndex: 0,
-    jumpTriggerX: {},
-    idCounter: 1,
-    gameOver: false,
-    eventLog: []
-  };
+  // Diese Methode wird bei jedem Start/Neustart aufgerufen
+  init() {
+    this.levelName = localStorage.getItem('jnt_level') || 'mittel';
+    this.level = LevelPresets[this.levelName] || LevelPresets.mittel;
 
-  this.groups = {};
-  this.sounds = {};
-  this.ui = {};
-  this.presenter = {};
-}
+    // State zurücksetzen, damit alles frisch startet
+    this.state = {
+      words: [],
+      worldSpeed: this.level.initialSpeed,
+      score: 0,
+      correctChars: 0,
+      errors: 0,
+      startTime: performance.now(),
+      clears: 0,
+      target: null,
+      typedIndex: 0,
+      jumpTriggerX: {},
+      idCounter: 1,
+      gameOver: false,
+      eventLog: []
+    };
+  }
 
 preload() {
   // Wörter
