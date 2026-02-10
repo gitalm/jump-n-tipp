@@ -91,10 +91,7 @@ init() {
 preload() {
   // Wörter
   this.load.text('woerter', 'woerter.txt');
-  
-	// Ein kleiner weißer Pixel für Partikel
-	g.fillStyle(0xffffff).fillRect(0, 0, 4, 4);
-	g.generateTexture('partikelPixel', 4, 4);
+ 
 
   // Spieler & Pigeon (Frames)
   this.load.image('parrot1', 'assets/characters/parrot.png');
@@ -122,6 +119,9 @@ preload() {
   g.generateTexture('groundPhys', WIDTH, GROUND_H); g.clear();
   g.fillStyle(0xffb300).fillRoundedRect(0, 0, 38, 38, 6);
   g.generateTexture('ph_player', 38, 38);
+  	// Ein kleiner weißer Pixel für Partikel
+	g.fillStyle(0xffffff).fillRect(0, 0, 4, 4);
+	g.generateTexture('partikelPixel', 4, 4);
   g.destroy();
 }
 
