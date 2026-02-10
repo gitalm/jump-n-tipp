@@ -1,13 +1,8 @@
-// Updated updateWordUI function
-function updateWordUI(objects) {
-    objects.forEach(object => {
-        const dynamicDepth = calculateDynamicDepth(object.x);
-        // existing code...
-        object.depth = dynamicDepth;
-    });
+// Assuming other contents of the game.js file are retained
+
+function updateWordUI(obj) {
+    const dynamicDepth = FG_LABEL_DEPTH + Math.round(obj.x / 5);
+    // ... rest of the updateWordUI function
 }
 
-function calculateDynamicDepth(xPosition) {
-    // Implement logic for depth calculation based on x position
-    return Math.floor(xPosition / 10); // Sample depth calculation
-}
+// Other functions and code remain as is...
