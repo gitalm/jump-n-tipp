@@ -9,34 +9,15 @@ const GROUND_DEPTH = 100;
 const OBJ_DEPTH = 150;      
 const PLAYER_DEPTH = 500;   
 const UI_DEPTH = 1000;
-const ACTIVE_WORD_DEPTH = 5000; // Absolute Spitze
+const ACTIVE_WORD_DEPTH = 5000;
 
 const LevelPresets = {
-  einfach: { initialSpeed: 60, accelPerMinute: 4,  obsDelay: 5000, itemDelay: 10000 },
-  mittel:  { initialSpeed: 90, accelPerMinute: 7,  obsDelay: 4000, itemDelay: 8000 },
-  schnell: { initialSpeed: 140, accelPerMinute: 12, obsDelay: 3000, itemDelay: 6000 }
+  einfach: { initialSpeed: 60, accelPerMinute: 4,  obsDelay: 5000, itemDelay: 10000, enemyDelay: 12000 },
+  mittel:  { initialSpeed: 90, accelPerMinute: 7,  obsDelay: 4000, itemDelay: 8000, enemyDelay: 9000 },
+  schnell: { initialSpeed: 140, accelPerMinute: 12, obsDelay: 3000, itemDelay: 6000, enemyDelay: 7000 }
 };
 
 const COLORS = { typed: '#0a7f3f', rest: '#083056', enemyRest: '#9b2c2c', itemRest: '#0b315a' };
-
-// Definitionen
-const OBSTACLES = [
-  { key: 'barrel', scale: 0.65 },
-  { key: 'ship', scale: 0.8 },
-  { key: 'big_thorns', scale: 0.8 },
-  { key: 'small_thorn', scale: 0.85 }
-];
-const ITEMS = [
-  { key: 'coin', word: 'gold', pts: 50 },
-  { key: 'heart', word: 'herz', pts: 100 },
-  { key: 'chest', word: 'schatz', pts: 200 },
-  { key: 'bomb', word: 'bombe', pts: 75 },
-  { key: 'compass', word: 'uhr', pts: 60 }
-];
-const ENEMIES = [
-  { key: 'skull', scale: 0.85, air: true },
-  { key: 'crab', scale: 0.9, air: false }
-];
 
 class GameScene extends Phaser.Scene {
   constructor() { super('game'); }
@@ -60,11 +41,19 @@ class GameScene extends Phaser.Scene {
     this.load.image('parrot3', 'assets/characters/parrot3.png');
     this.load.image('pigeon1', 'assets/characters/pigeon.png');
     
-    OBSTACLES.forEach(d => this.load.image(d.key, `assets/obstacles/${d.key}.png` || `assets/environment/${d.key}.png`));
-    this.load.image('ship', 'assets/environment/ship.png'); // Extra Pfad-Check
+    // Assets Pfade basierend auf ls -R
+    this.load.image('barrel', 'assets/obstacles/barrel.png');
+    this.load.image('ship', 'assets/environment/ship.png');
+    this.load.image('big_thorns', 'assets/obstacles/big_thorns.png');
+    this.load.image('small_thorn', 'assets/obstacles/small_thorn.png');
     this.load.image('skull', 'assets/environment/skull.png');
     this.load.image('crab', 'assets/environment/crab.png');
-    ITEMS.forEach(d => this.load.image(d.key, `assets/items/${d.key}.png`));
+    
+    this.load.image('coin', 'assets/items/coin.png');
+    this.load.image('heart', 'assets/items/heart.png');
+    this.load.image('chest', 'assets/items/chest.png');
+    this.load.image('bomb', 'assets/items/bomb.png');
+    this.load.image('compass', 'assets/items/compass.png');
 
     this.load.audio('sfx_kling', 'assets/sounds/kling.mp3');
     this.load.audio('sfx_jump',  'assets/sounds/jump.mp3');
@@ -93,28 +82,28 @@ class GameScene extends Phaser.Scene {
     const physGround = this.physics.add.staticImage(WIDTH/2, HEIGHT - GROUND_H/2, 'groundPhys').setAlpha(0);
     this.add.image(WIDTH/2, HEIGHT - GROUND_H/2, 'groundVis').setDepth(GROUND_DEPTH);
 
-    // Pirat
+    // Pirat Startposition 140
     this.player = this.physics.add.sprite(140, HEIGHT - GROUND_H - 100, 'parrot1').setScale(0.95).setDepth(PLAYER_DEPTH);
     this.player.setCollideWorldBounds(true);
     this.player.body.setGravityY(2500);
     this.physics.add.collider(this.player, physGround);
 
-    // Taube
     this.pigeon = this.add.sprite(WIDTH/2, 100, 'pigeon1').setScale(0.5).setDepth(UI_DEPTH);
 
     this.anims.create({ key: 'run', frames: [{key:'parrot1'}, {key:'parrot2'}, {key:'parrot3'}], frameRate: 8, repeat: -1 });
     this.player.anims.play('run');
 
-    // Wörter
     const raw = this.cache.text.get('woerter') || 'pirat gold ahoi';
     this.state.words = raw.split(/\s+/).filter(w => w.length > 2);
     Phaser.Utils.Array.Shuffle(this.state.words);
 
     this.groups.obs = this.physics.add.group({ allowGravity: false });
     this.groups.items = this.physics.add.group({ allowGravity: false });
+    this.groups.enemies = this.physics.add.group({ allowGravity: false });
 
-    // Kollision (Nur wenn NICHT cleared)
-    this.physics.add.overlap(this.player, this.groups.obs, (_, o) => { if(!o.cleared) this.gameOver('Hoppla!'); });
+    // Kollisionen
+    this.physics.add.overlap(this.player, this.groups.obs, (_, o) => { if(!o.cleared) this.gameOver('An einem Hindernis hängengeblieben!'); });
+    this.physics.add.overlap(this.player, this.groups.enemies, (_, e) => { if(!e.destroyed) this.gameOver('Von einem Gegner erwischt!'); });
     this.physics.add.overlap(this.player, this.groups.items, (_, i) => { if(i.ready) this.collectItem(i); });
 
     this.sounds.kling = this.sound.add('sfx_kling');
@@ -125,9 +114,11 @@ class GameScene extends Phaser.Scene {
     this.ui.hud = this.add.text(20, 20, '', { fontSize: 24, color: '#083056', fontStyle: 'bold' }).setDepth(ACTIVE_WORD_DEPTH);
     this.input.keyboard.on('keydown', e => this.handleKey(e));
 
+    // Spawner
     this.spawnObstacle();
     this.time.addEvent({ delay: this.level.obsDelay, loop: true, callback: () => this.spawnObstacle() });
     this.time.addEvent({ delay: this.level.itemDelay, loop: true, callback: () => this.spawnItem() });
+    this.time.addEvent({ delay: this.level.enemyDelay, loop: true, callback: () => this.spawnEnemy() });
 
     this.setupLevelButtons();
   }
@@ -135,40 +126,50 @@ class GameScene extends Phaser.Scene {
   update() {
     if (this.state.gameOver) return;
 
-    // Beschleunigung
     this.state.worldSpeed += 0.01;
-    
     this.clouds.tilePositionX += 0.2;
     this.sea.tilePositionX += (this.state.worldSpeed * 0.005);
     this.sea.y = (HEIGHT - GROUND_H - 150) + Math.sin(this.time.now / 1000) * 10;
 
-    const proc = obj => {
+    // RÜCKZUG-LOGIK: Pirat kehrt sanft auf x=140 zurück
+    if (this.player.x > 140) {
+        this.player.x -= 0.5; 
+    } else if (this.player.x < 140) {
+        this.player.x = 140;
+    }
+
+    const proc = (obj, type) => {
       if (!obj.active) return;
       obj.x -= (this.state.worldSpeed / 60);
+      
       if (obj.ui) {
         this.updateWordUI(obj);
         obj.ui.cont.setDepth(obj === this.state.target ? ACTIVE_WORD_DEPTH : UI_DEPTH);
       }
-      // Auto-Sprung Logik
-      if (obj.readyToJump && this.player.body.onFloor() && obj.x < this.player.x + 120 && obj.x > this.player.x) {
-        this.player.setVelocityY(-950);
-        this.player.setVelocityX(150); // Kleiner Schubs nach vorne
-        this.time.delayedCall(400, () => this.player.setVelocityX(0)); // Zurück auf Position
+
+      // Sprung auslösen
+      if (obj.readyToJump && this.player.body.onFloor() && obj.x < this.player.x + 130 && obj.x > this.player.x) {
+        this.player.setVelocityY(-980);
+        this.player.x += 40; // Kurzer Satz nach vorne
         this.sounds.jump.play();
         obj.readyToJump = false;
+        if(obj.body) obj.body.checkCollision.none = true; 
       }
+
       if (obj.x < -200) { if(obj.ui) obj.ui.cont.destroy(); obj.destroy(); }
     };
-    this.groups.obs.getChildren().forEach(proc);
-    this.groups.items.getChildren().forEach(proc);
+
+    this.groups.obs.getChildren().forEach(o => proc(o, 'obs'));
+    this.groups.items.getChildren().forEach(i => proc(i, 'item'));
+    this.groups.enemies.getChildren().forEach(e => proc(e, 'enemy'));
 
     if (!this.state.target) this.chooseTarget();
 
     if (this.state.target) {
       const tx = this.state.target.x - 120;
       const ty = this.state.target.y - 100 + Math.sin(this.time.now / 500) * 20;
-      this.pigeon.x += (tx - this.pigeon.x) * 0.04;
-      this.pigeon.y += (ty - this.pigeon.y) * 0.04;
+      this.pigeon.x += (tx - this.pigeon.x) * 0.03; // Schön geschmeidig
+      this.pigeon.y += (ty - this.pigeon.y) * 0.03;
     }
     this.updateHUD();
   }
@@ -190,60 +191,81 @@ class GameScene extends Phaser.Scene {
 
   onWordCompleted(t) {
     this.tweens.add({ targets: t.ui.cont, scale: 1.5, alpha: 0, duration: 200 });
-    
-    if (t.type === 'obs') {
-      t.cleared = true; t.readyToJump = true; this.state.score += 10;
-    } else {
-      t.ready = true; t.readyToJump = true; // Items auch überspringen wenn gewollt
+    if (t.type === 'obs' || t.type === 'item') {
+      t.readyToJump = true; 
+      if (t.type === 'item') t.ready = true;
+      this.state.score += 10;
+    } else if (t.type === 'enemy') {
+      this.confettiRain(t.x, t.y, [0x9b2c2c, 0xffffff]); // Rotes Konfetti für Gegner
+      t.destroyed = true;
+      this.state.score += 30;
+      if(t.ui) t.ui.cont.destroy();
+      t.destroy();
     }
     this.state.target = null;
     this.chooseTarget();
   }
 
   collectItem(it) {
-    this.confettiRain(it.x, it.y);
+    this.confettiRain(it.x, it.y, [0xffff00, 0xffffff, 0x00ff00, 0xffa500]); // Bunter Regen
     this.sounds.kling.play();
     this.state.score += 100;
     if(it.ui) it.ui.cont.destroy();
     it.destroy();
   }
 
-  confettiRain(x, y) {
-    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffa500];
-    for (let i = 0; i < 30; i++) {
+  confettiRain(x, y, colorSet) {
+    for (let i = 0; i < 25; i++) {
       const p = this.add.image(x, y, 'confetti').setDepth(ACTIVE_WORD_DEPTH);
-      p.setTint(Phaser.Utils.Array.GetRandom(colors));
+      p.setTint(Phaser.Utils.Array.GetRandom(colorSet));
       this.physics.add.existing(p);
-      p.body.setVelocity(Phaser.Math.Between(-200, 200), Phaser.Math.Between(-400, -100));
-      p.body.setGravityY(600);
-      p.body.setAngularVelocity(Phaser.Math.Between(100, 500));
-      this.time.delayedCall(2000, () => p.destroy());
+      p.body.setVelocity(Phaser.Math.Between(-250, 250), Phaser.Math.Between(-500, -150));
+      p.body.setGravityY(800);
+      p.body.setAngularVelocity(Phaser.Math.Between(100, 800));
+      this.time.delayedCall(1500, () => p.destroy());
     }
   }
 
   spawnObstacle() {
-    const d = Phaser.Utils.Array.GetRandom(OBSTACLES);
-    const o = this.add.sprite(WIDTH + 200, HEIGHT - GROUND_H - 10, d.key).setScale(d.scale).setDepth(OBJ_DEPTH);
+    const list = [
+        {k:'barrel', s:0.65}, {k:'ship', s:0.75}, 
+        {k:'big_thorns', s:0.8}, {k:'small_thorn', s:0.85}
+    ];
+    const d = Phaser.Utils.Array.GetRandom(list);
+    const o = this.add.sprite(WIDTH + 200, 0, d.k).setScale(d.s).setDepth(OBJ_DEPTH);
     this.physics.add.existing(o);
     o.y = HEIGHT - GROUND_H - (o.displayHeight / 2) + 2;
-    o.type = 'obs'; o.cleared = false; o.word = this.state.words.shift() || 'ahoi';
+    o.type = 'obs'; o.cleared = false; o.word = this.state.words.shift() || 'pirat';
     this.groups.obs.add(o);
     this.createWordUI(o, '#9b2c2c');
-    if(this.state.words.length < 5) this.state.words.push('pirat','gold','insel','schatz');
+    if(this.state.words.length < 5) this.state.words.push('gold','ahoi','schiff','insel','schatz','papagei','hüpfen');
+  }
+
+  spawnEnemy() {
+    const list = [{k:'skull', a:true}, {k:'crab', a:false}];
+    const d = Phaser.Utils.Array.GetRandom(list);
+    const y = d.a ? HEIGHT - 220 : HEIGHT - GROUND_H - 30;
+    const e = this.add.sprite(WIDTH + 200, y, d.k).setScale(0.9).setDepth(OBJ_DEPTH);
+    this.physics.add.existing(e);
+    if (!d.a) e.y = HEIGHT - GROUND_H - (e.displayHeight/2);
+    e.type = 'enemy'; e.destroyed = false; e.word = this.state.words.shift() || 'gegner';
+    this.groups.enemies.add(e);
+    this.createWordUI(e, '#000000');
   }
 
   spawnItem() {
-    const d = Phaser.Utils.Array.GetRandom(ITEMS);
-    const i = this.add.sprite(WIDTH + 200, HEIGHT - 220, d.key).setScale(0.8).setDepth(OBJ_DEPTH);
+    const list = ['coin','heart','chest','bomb','compass'];
+    const k = Phaser.Utils.Array.GetRandom(list);
+    const i = this.add.sprite(WIDTH + 200, HEIGHT - 200, k).setScale(0.85).setDepth(OBJ_DEPTH);
     this.physics.add.existing(i);
-    i.type = 'item'; i.ready = false; i.word = d.word;
+    i.type = 'item'; i.ready = false; i.word = k === 'coin' ? 'gold' : k;
     this.groups.items.add(i);
     this.createWordUI(i, '#0b315a');
   }
 
   chooseTarget() {
-    const pot = [...this.groups.obs.getChildren(), ...this.groups.items.getChildren()]
-      .filter(o => o.active && !o.cleared && !o.ready && o.x > 160)
+    const pot = [...this.groups.obs.getChildren(), ...this.groups.items.getChildren(), ...this.groups.enemies.getChildren()]
+      .filter(o => o.active && !o.cleared && !o.ready && !o.destroyed && o.x > 160)
       .sort((a,b) => a.x - b.x);
     if (pot.length > 0) { this.state.target = pot[0]; this.state.typedIndex = 0; }
   }
