@@ -3,13 +3,14 @@ const WIDTH = 960;
 const HEIGHT = 540;
 const GROUND_H = 56;
 
-// Tiefen-Ebenen
+// Tiefen-Ebenen (Z-Index)
 const BG_DEPTH = -10;
 const GROUND_DEPTH = 100;
 const OBJ_DEPTH = 150;      
 const PLAYER_DEPTH = 500;   
 const UI_DEPTH = 1000;
 const ACTIVE_WORD_DEPTH = 5000;
+const OVERLAY_DEPTH = 9999; // Fix: Jetzt definiert!
 
 const LevelPresets = {
   einfach: { initialSpeed: 60, accelPerMinute: 4,  obsDelay: 5000, itemDelay: 10000, enemyDelay: 12000 },
@@ -41,7 +42,7 @@ class GameScene extends Phaser.Scene {
     this.load.image('parrot3', 'assets/characters/parrot3.png');
     this.load.image('pigeon1', 'assets/characters/pigeon.png');
     
-    // Assets Pfade basierend auf ls -R
+    // Präzise Pfade laut ls -R
     this.load.image('barrel', 'assets/obstacles/barrel.png');
     this.load.image('ship', 'assets/environment/ship.png');
     this.load.image('big_thorns', 'assets/obstacles/big_thorns.png');
@@ -82,7 +83,7 @@ class GameScene extends Phaser.Scene {
     const physGround = this.physics.add.staticImage(WIDTH/2, HEIGHT - GROUND_H/2, 'groundPhys').setAlpha(0);
     this.add.image(WIDTH/2, HEIGHT - GROUND_H/2, 'groundVis').setDepth(GROUND_DEPTH);
 
-    // Pirat Startposition 140
+    // Pirat - Bleibt fest auf x=140
     this.player = this.physics.add.sprite(140, HEIGHT - GROUND_H - 100, 'parrot1').setScale(0.95).setDepth(PLAYER_DEPTH);
     this.player.setCollideWorldBounds(true);
     this.player.body.setGravityY(2500);
@@ -101,9 +102,9 @@ class GameScene extends Phaser.Scene {
     this.groups.items = this.physics.add.group({ allowGravity: false });
     this.groups.enemies = this.physics.add.group({ allowGravity: false });
 
-    // Kollisionen
-    this.physics.add.overlap(this.player, this.groups.obs, (_, o) => { if(!o.cleared) this.gameOver('An einem Hindernis hängengeblieben!'); });
-    this.physics.add.overlap(this.player, this.groups.enemies, (_, e) => { if(!e.destroyed) this.gameOver('Von einem Gegner erwischt!'); });
+    // ÜBERLAPPUNG STATT KOLLISION (Verhindert Schieben/Drift)
+    this.physics.add.overlap(this.player, this.groups.obs, (_, o) => { if(!o.cleared) this.gameOver('Hoppla!'); });
+    this.physics.add.overlap(this.player, this.groups.enemies, (_, e) => { if(!e.destroyed) this.gameOver('Gegner!'); });
     this.physics.add.overlap(this.player, this.groups.items, (_, i) => { if(i.ready) this.collectItem(i); });
 
     this.sounds.kling = this.sound.add('sfx_kling');
@@ -114,7 +115,6 @@ class GameScene extends Phaser.Scene {
     this.ui.hud = this.add.text(20, 20, '', { fontSize: 24, color: '#083056', fontStyle: 'bold' }).setDepth(ACTIVE_WORD_DEPTH);
     this.input.keyboard.on('keydown', e => this.handleKey(e));
 
-    // Spawner
     this.spawnObstacle();
     this.time.addEvent({ delay: this.level.obsDelay, loop: true, callback: () => this.spawnObstacle() });
     this.time.addEvent({ delay: this.level.itemDelay, loop: true, callback: () => this.spawnItem() });
@@ -131,14 +131,10 @@ class GameScene extends Phaser.Scene {
     this.sea.tilePositionX += (this.state.worldSpeed * 0.005);
     this.sea.y = (HEIGHT - GROUND_H - 150) + Math.sin(this.time.now / 1000) * 10;
 
-    // RÜCKZUG-LOGIK: Pirat kehrt sanft auf x=140 zurück
-    if (this.player.x > 140) {
-        this.player.x -= 0.5; 
-    } else if (this.player.x < 140) {
-        this.player.x = 140;
-    }
+    // Pirat strikt auf Position halten
+    this.player.setX(140);
 
-    const proc = (obj, type) => {
+    const proc = (obj) => {
       if (!obj.active) return;
       obj.x -= (this.state.worldSpeed / 60);
       
@@ -148,28 +144,26 @@ class GameScene extends Phaser.Scene {
       }
 
       // Sprung auslösen
-      if (obj.readyToJump && this.player.body.onFloor() && obj.x < this.player.x + 130 && obj.x > this.player.x) {
-        this.player.setVelocityY(-980);
-        this.player.x += 40; // Kurzer Satz nach vorne
+      if (obj.readyToJump && this.player.body.onFloor() && obj.x < this.player.x + 140 && obj.x > this.player.x) {
+        this.player.setVelocityY(-1000); // Kraftvoller Sprung
         this.sounds.jump.play();
         obj.readyToJump = false;
-        if(obj.body) obj.body.checkCollision.none = true; 
       }
 
       if (obj.x < -200) { if(obj.ui) obj.ui.cont.destroy(); obj.destroy(); }
     };
 
-    this.groups.obs.getChildren().forEach(o => proc(o, 'obs'));
-    this.groups.items.getChildren().forEach(i => proc(i, 'item'));
-    this.groups.enemies.getChildren().forEach(e => proc(e, 'enemy'));
+    this.groups.obs.getChildren().forEach(proc);
+    this.groups.items.getChildren().forEach(proc);
+    this.groups.enemies.getChildren().forEach(proc);
 
     if (!this.state.target) this.chooseTarget();
 
     if (this.state.target) {
       const tx = this.state.target.x - 120;
-      const ty = this.state.target.y - 100 + Math.sin(this.time.now / 500) * 20;
-      this.pigeon.x += (tx - this.pigeon.x) * 0.03; // Schön geschmeidig
-      this.pigeon.y += (ty - this.pigeon.y) * 0.03;
+      const ty = this.state.target.y - 110 + Math.sin(this.time.now / 500) * 20;
+      this.pigeon.x += (tx - this.pigeon.x) * 0.04;
+      this.pigeon.y += (ty - this.pigeon.y) * 0.04;
     }
     this.updateHUD();
   }
@@ -192,11 +186,11 @@ class GameScene extends Phaser.Scene {
   onWordCompleted(t) {
     this.tweens.add({ targets: t.ui.cont, scale: 1.5, alpha: 0, duration: 200 });
     if (t.type === 'obs' || t.type === 'item') {
-      t.readyToJump = true; 
+      t.cleared = true; t.readyToJump = true; 
       if (t.type === 'item') t.ready = true;
       this.state.score += 10;
     } else if (t.type === 'enemy') {
-      this.confettiRain(t.x, t.y, [0x9b2c2c, 0xffffff]); // Rotes Konfetti für Gegner
+      this.confettiRain(t.x, t.y, [0x9b2c2c, 0xffffff]);
       t.destroyed = true;
       this.state.score += 30;
       if(t.ui) t.ui.cont.destroy();
@@ -207,7 +201,7 @@ class GameScene extends Phaser.Scene {
   }
 
   collectItem(it) {
-    this.confettiRain(it.x, it.y, [0xffff00, 0xffffff, 0x00ff00, 0xffa500]); // Bunter Regen
+    this.confettiRain(it.x, it.y, [0xffff00, 0xffffff, 0x00ff00, 0xffa500]);
     this.sounds.kling.play();
     this.state.score += 100;
     if(it.ui) it.ui.cont.destroy();
@@ -238,24 +232,22 @@ class GameScene extends Phaser.Scene {
     o.type = 'obs'; o.cleared = false; o.word = this.state.words.shift() || 'pirat';
     this.groups.obs.add(o);
     this.createWordUI(o, '#9b2c2c');
-    if(this.state.words.length < 5) this.state.words.push('gold','ahoi','schiff','insel','schatz','papagei','hüpfen');
+    if(this.state.words.length < 5) this.state.words.push('gold','ahoi','insel','schatz','meer');
   }
 
   spawnEnemy() {
-    const list = [{k:'skull', a:true}, {k:'crab', a:false}];
-    const d = Phaser.Utils.Array.GetRandom(list);
+    const d = Phaser.Utils.Array.GetRandom([{k:'skull', a:true}, {k:'crab', a:false}]);
     const y = d.a ? HEIGHT - 220 : HEIGHT - GROUND_H - 30;
     const e = this.add.sprite(WIDTH + 200, y, d.k).setScale(0.9).setDepth(OBJ_DEPTH);
     this.physics.add.existing(e);
     if (!d.a) e.y = HEIGHT - GROUND_H - (e.displayHeight/2);
-    e.type = 'enemy'; e.destroyed = false; e.word = this.state.words.shift() || 'gegner';
+    e.type = 'enemy'; e.destroyed = false; e.word = this.state.words.shift() || 'ahoi';
     this.groups.enemies.add(e);
     this.createWordUI(e, '#000000');
   }
 
   spawnItem() {
-    const list = ['coin','heart','chest','bomb','compass'];
-    const k = Phaser.Utils.Array.GetRandom(list);
+    const k = Phaser.Utils.Array.GetRandom(['coin','heart','chest','bomb','compass']);
     const i = this.add.sprite(WIDTH + 200, HEIGHT - 200, k).setScale(0.85).setDepth(OBJ_DEPTH);
     this.physics.add.existing(i);
     i.type = 'item'; i.ready = false; i.word = k === 'coin' ? 'gold' : k;
@@ -286,7 +278,7 @@ class GameScene extends Phaser.Scene {
     cont.setPosition(obj.x, obj.y - obj.displayHeight/2 - 40);
     t1.setX(-tw/2); t2.setX(-tw/2 + t1.width);
     g.clear().fillStyle(0xffffff, 0.95).lineStyle(isT ? 4 : 2, isT ? 0xffb300 : 0xccd6e0);
-    g.fillRoundedRect(-tw/2-10, -20, tw+20, 40, 10).strokeRoundedRect(-tw/2-10, -20, tw+20, 40, 10);
+    g.fillRoundedRect(-tw/2-12, -20, tw+24, 40, 12).strokeRoundedRect(-tw/2-12, -20, tw+24, 40, 12);
   }
 
   updateHUD() {
