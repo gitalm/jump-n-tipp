@@ -13,8 +13,8 @@ const ACTIVE_WORD_DEPTH = 5000;
 const OVERLAY_DEPTH = 9999; // Fix: Jetzt definiert!
 
 const LevelPresets = {
-  einfach: { initialSpeed: 30, accelPerMinute: 4,  obsDelay: 5000, itemDelay: 10000, enemyDelay: 12000 },
-  mittel:  { initialSpeed: 60, accelPerMinute: 7,  obsDelay: 4000, itemDelay: 8000, enemyDelay: 9000 },
+  einfach: { initialSpeed: 30, accelPerMinute: 4,  obsDelay: 6000, itemDelay: 11000, enemyDelay: 13000 },
+  mittel:  { initialSpeed: 60, accelPerMinute: 7,  obsDelay: 5000, itemDelay: 8000, enemyDelay: 9000 },
   schnell: { initialSpeed: 120, accelPerMinute: 12, obsDelay: 3000, itemDelay: 6000, enemyDelay: 7000 }
 };
 
