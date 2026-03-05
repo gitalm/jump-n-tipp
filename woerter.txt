@@ -1,94 +1,149 @@
-Herr G. sagt: ggf. gegen Gene.
-Er röhrte: Das ist die Gelegenheit.
-Es geht: Gunst und Gnade.
-Grund der Störung: defekte Leitung.
-Sie sagte: Genau das ist es.
-Die Gase duften gut.
-Danke ihr guten Götter.
-Er rechtfertigte: Er hat Schaden ertragen.
-Herr Gans ging angeln.
-Es geht uns gut Frau Gierig.
-Eines Tages:
-In guter Erinnerung.
-In der Regel.
-Das Geld ist in Gefahr.
-Angst liegt in der Luft.
-Die Augen sind nun gesund.
-Ein Grad Celsius.
-Da lag Deutschland.
-Er hat geschlafen.
-Das ist die Krönung.
-Ich reite die Strecke tagelang.
-Es ist alles fertig.
-Er hielt sein Gesicht.
-Es ist eine unruhige und innige Nacht.
-Er schlich niedergeschlagen nach Hause.
-Allerdings liegt der Eingang rechts hinten.
-Es stand nicht dran.
-Hastig hurtet Herr Graf hinauf.
-Gut ist nicht gut genug.
-Gestern ging es nicht.
-Gerhard sagte: Ist ja gut.
-Geniale Köche grillen Grillgut.
-Gegner der Anklage:
-Es regnete und dann hagelte es.
-Sein Gang ist gestört durch defekte Gelenke.
-Sie fliegen nach Griechenland.
-Auf Grönland herrscht eine geringe Gefahr.
-Der Gesellschaft ging es gut.
-Gut und gerne drei Kannen Öl.
-Sie fegt die Gerstenkörner unter den Tisch.
-Sehr
-geehrter
-Herr
+Ameise
+Boot
+Café
+Dach
+Eule
+Feder
 Gans
-Sehr
-geehrte
-Frau
-Gadeg
-Aluhut
-tut
-selten
-gut
-Glasklar
-Granatenhagel
-Gagarin
-sah
-ggf
-eine
-gute
-Gelegenheit
-Gut
-ist
-nicht
-gut
-genug
-Geniale
-Köche
-grillen
-Grillgut
-Sein
-Gang
-ist
-gestört
-durch
-defekte
-Gelenke
-Grund
-der
-Störung:
-defekte
-Leitung
-In
-guter
-Erinnerung
-Ein
-Grad
-Celsius
-Es
-ist
-alles
-fertig
-hinten
-Glasklar
-Granatenhagel
+Haus
+Igel
+Junge
+Kuchen
+Lampe
+Maus
+Nase
+Ofen
+Panda
+Rad
+Sonne
+Tisch
+Uhr
+Vogel
+Wald
+Zebra
+Berg
+Clown
+Dose
+Ei
+Fisch
+Garten
+Hand
+Insel
+Jacke
+Kind
+Löffel
+Mond
+Nadel
+Oma
+Pfanne
+Rose
+Sand
+Turm
+Ufer
+Vase
+Wolf
+Zucker
+Buch
+Computer
+Drache
+Eimer
+Fuchs
+Gabel
+Himmel
+Idee
+Joggen
+Kaffee
+Lamm
+Mütze
+Nest
+Ozean
+Pilz
+Rabe
+Schiff
+Tasse
+U-Bahn
+Villa
+Welle
+Zelt
+Bett
+Dorf
+Eiche
+Feld
+Gras
+Hund
+Juwel
+Kamm
+Luft
+Milch
+Nuss
+Ohr
+Park
+Ring
+Stern
+Tiger
+Uni
+Vulkan
+Wurst
+Zahn
+Ball
+Dache
+Eule
+Fels
+Gans
+Hut
+Iris
+Jahr
+Kuh
+Mutter
+Netz
+Obst
+Puppe
+Sack
+Tor
+Vater
+Wiese
+Zug
+Biene
+Code
+Dachs
+Eimer
+Feder
+Glas
+Haus
+Igel
+Junge
+Kuchen
+Loch
+Mond
+Nase
+Oma
+Panda
+Regen
+Sack
+Turm
+Uhu
+Vogel
+Wald
+Zebra
+Buch
+Couch
+Dose
+Eule
+Fisch
+Gabel
+Hand
+Insel
+Jacke
+Kind
+Lampe
+Maus
+Nuss
+Ofen
+Pfanne
+Rad
+Sonne
+Tisch
+Uhr
+Vase
+Wolf
+Zucker
